@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: ruleta-probabilidad
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn server:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: ADMIN_PASSWORD
+        value: Mendoza
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ruleta-db
+          property: connectionString
+databases:
+  - name: ruleta-db
+    plan: free

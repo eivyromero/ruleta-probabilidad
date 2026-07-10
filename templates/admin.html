@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel de Control — Ruleta</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;600;700;800&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--felt-dark:#0a2f24;--gold:#cba135;--gold-bright:#e8c766;--cream:#f2e9d8;
+    --line:rgba(203,161,53,0.25);--panel:rgba(0,0,0,0.22);--red:#c8324a;}
+  *{box-sizing:border-box;}
+  body{margin:0;min-height:100vh;padding:22px 16px 60px;
+    background:radial-gradient(ellipse at 50% -10%,#163f31 0%,var(--felt-dark) 55%,#071f18 100%);
+    font-family:'Inter',sans-serif;color:var(--cream);}
+  .wrap{max-width:900px;margin:0 auto;}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;flex-wrap:wrap;gap:10px;}
+  h1{font-family:'Playfair Display',serif;font-weight:900;font-size:26px;margin:0;
+    background:linear-gradient(180deg,var(--gold-bright),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .logout{font-family:'Roboto Mono',monospace;font-size:12px;color:#a89f86;text-decoration:none;border:1px solid var(--line);
+    padding:7px 14px;border-radius:999px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:18px;}
+  .card h2{font-family:'Playfair Display',serif;font-size:18px;margin:0 0 12px;color:var(--gold-bright);}
+  table{width:100%;border-collapse:collapse;font-family:'Roboto Mono',monospace;font-size:12.5px;}
+  th{text-align:left;color:#a89f86;font-weight:500;padding:7px 6px;border-bottom:1px solid var(--line);font-size:11px;text-transform:uppercase;}
+  td{padding:9px 6px;border-bottom:1px solid rgba(255,255,255,0.05);}
+  tr:last-child td{border-bottom:none;}
+  .coins{color:var(--gold-bright);font-weight:700;}
+  .badge{font-size:10px;padding:2px 8px;border-radius:999px;background:rgba(91,224,138,0.15);color:#5be08a;}
+  .badge.off{background:rgba(255,255,255,0.06);color:#8a8271;}
+  .addbtn{border:none;border-radius:999px;padding:6px 12px;cursor:pointer;font-family:'Inter',sans-serif;
+    font-weight:700;font-size:11px;background:linear-gradient(180deg,var(--gold-bright),var(--gold));color:#1a1305;}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+  .row input{padding:11px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,0.05);
+    color:var(--cream);font-family:'Roboto Mono',monospace;font-size:13px;}
+  .row input[type=text]{flex:1;min-width:150px;}
+  .row input[type=number]{width:90px;}
+  .row button{border:none;border-radius:999px;padding:11px 20px;cursor:pointer;font-weight:800;font-size:13px;
+    background:linear-gradient(180deg,var(--gold-bright),var(--gold));color:#1a1305;}
+  .danger{background:linear-gradient(180deg,#d4485c,#8e2334) !important;color:#fff !important;}
+  .hint{font-family:'Roboto Mono',monospace;font-size:11px;color:#8a8271;line-height:1.6;}
+  .msg{font-family:'Roboto Mono',monospace;font-size:12px;min-height:18px;margin-top:8px;}
+  .msg.ok{color:#5be08a;} .msg.err{color:#e88a97;}
+  .quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
+  .quick button{padding:5px 12px;font-size:11px;border-radius:999px;border:1px solid var(--line);
+    background:rgba(255,255,255,0.04);color:var(--cream);cursor:pointer;font-family:'Roboto Mono',monospace;}
+  .empty{color:#8a8271;font-family:'Roboto Mono',monospace;font-size:12px;padding:10px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🔐 Panel de Control</h1>
+    <a class="logout" href="/admin/logout">Cerrar sesión</a>
+  </header>
+
+  <div class="card">
+    <h2>🪙 Recargar monedas a un jugador</h2>
+    <div class="row">
+      <input type="text" id="playerName" placeholder="Nombre del jugador">
+      <input type="number" id="amount" value="12" placeholder="cantidad">
+      <button id="addBtn">Agregar monedas</button>
+    </div>
+    <div class="quick">
+      <button data-amt="5">+5</button>
+      <button data-amt="10">+10</button>
+      <button data-amt="12">+12</button>
+      <button data-amt="20">+20</button>
+      <button data-amt="50">+50</button>
+      <button data-amt="100">+100</button>
+    </div>
+    <div class="msg" id="addMsg"></div>
+    <p class="hint">Escribe la cantidad que quieras, sin tope — los botones son solo atajos.
+      Puedes usar un número negativo (ej. -5) si te equivocaste y quieres descontar.
+      La recarga es gratuita: úsala como premio por responder una pregunta de probabilidad,
+      o simplemente para que quien se quedó sin monedas pueda seguir jugando.</p>
+  </div>
+
+  <div class="card">
+    <h2>👥 Jugadores activos <span id="activeCount" class="hint"></span></h2>
+    <div id="activeWrap"><div class="empty">Cargando…</div></div>
+  </div>
+
+  <div class="card">
+    <h2>📋 Registro histórico de participantes</h2>
+    <div id="registryWrap"><div class="empty">Cargando…</div></div>
+  </div>
+
+  <div class="card">
+    <h2>♻️ Nueva ronda</h2>
+    <p class="hint">Borra los giros y las apuestas (la tabla y los gráficos vuelven a cero) y desactiva
+      a los jugadores actuales. El registro histórico se conserva.</p>
+    <div class="row" style="margin-top:12px;">
+      <button id="resetBtn">Reiniciar ronda</button>
+      <button id="wipeBtn" class="danger">Borrar TODO (incluye registro)</button>
+    </div>
+    <div class="msg" id="resetMsg"></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+function msg(el, text, ok=true){ el.textContent = text; el.className = 'msg ' + (ok?'ok':'err');
+  setTimeout(()=>{ el.textContent=''; }, 4000); }
+
+document.querySelectorAll('.quick button').forEach(b=>{
+  b.addEventListener('click', ()=>{ $('amount').value = b.dataset.amt; });
+});
+
+async function addCoins(name, amount){
+  const res = await fetch('/api/admin/add_coins', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name, amount})}).then(r=>r.json());
+  if(res.error){ msg($('addMsg'), '✗ ' + res.error, false); return; }
+  msg($('addMsg'), `✓ ${res.added} monedas a ${res.name} — ahora tiene ${res.coins} 🪙`);
+  loadActive(); loadRegistry();
+}
+
+$('addBtn').addEventListener('click', ()=>{
+  const name = $('playerName').value.trim();
+  const amount = Number($('amount').value);
+  if(!name){ msg($('addMsg'), '✗ Escribe el nombre del jugador', false); return; }
+  if(!amount || !Number.isInteger(amount)){ msg($('addMsg'), '✗ Escribe una cantidad válida', false); return; }
+  addCoins(name, amount);
+});
+
+async function loadActive(){
+  const res = await fetch('/api/players').then(r=>r.json());
+  const wrap = $('activeWrap');
+  $('activeCount').textContent = `(${res.players.length})`;
+  if(!res.players.length){ wrap.innerHTML = '<div class="empty">Nadie conectado en esta ronda todavía</div>'; return; }
+  wrap.innerHTML = `<table><thead><tr>
+      <th>Jugador</th><th>Monedas</th><th>Apostado</th><th>Neto</th><th>Apuestas</th><th></th>
+    </tr></thead><tbody>` + res.players.map(p=>`
+      <tr>
+        <td><b>${p.name}</b></td>
+        <td class="coins">${p.coins}</td>
+        <td>${p.staked}</td>
+        <td style="color:${p.net>=0?'#5be08a':'#e88a97'}">${p.net>=0?'+':''}${p.net}</td>
+        <td>${p.bets_won}/${p.bets_count}</td>
+        <td><button class="addbtn" data-name="${p.name}">+ monedas</button></td>
+      </tr>`).join('') + '</tbody></table>';
+  wrap.querySelectorAll('.addbtn').forEach(b=>{
+    b.addEventListener('click', ()=>{ addCoins(b.dataset.name, Number($('amount').value)); });
+  });
+}
+
+async function loadRegistry(){
+  const res = await fetch('/api/registry').then(r=>r.json());
+  const wrap = $('registryWrap');
+  if(!res.total){ wrap.innerHTML = '<div class="empty">Aún no hay participantes registrados</div>'; return; }
+  wrap.innerHTML = `<p class="hint" style="margin:0 0 10px">Total de participantes: <b>${res.total}</b></p>
+    <table><thead><tr>
+      <th>Nombre</th><th>Estado</th><th>Monedas</th><th>Recargas</th><th>Apuestas</th><th>Se unió</th>
+    </tr></thead><tbody>` + res.registry.map(p=>`
+      <tr>
+        <td><b>${p.name}</b></td>
+        <td><span class="badge ${p.active?'':'off'}">${p.active?'activo':'inactivo'}</span></td>
+        <td class="coins">${p.coins}</td>
+        <td>${p.coins_added}</td>
+        <td>${p.bets_won}/${p.bets_count}</td>
+        <td>${p.joined}</td>
+      </tr>`).join('') + '</tbody></table>';
+}
+
+$('resetBtn').addEventListener('click', async ()=>{
+  if(!confirm('¿Reiniciar la ronda? Se borran giros y apuestas. El registro histórico se conserva.')) return;
+  const res = await fetch('/api/admin/reset', {method:'POST'}).then(r=>r.json());
+  if(res.ok){ msg($('resetMsg'), '✓ Ronda reiniciada — tabla y gráficos en cero'); loadActive(); loadRegistry(); }
+});
+
+$('wipeBtn').addEventListener('click', async ()=>{
+  if(!confirm('⚠️ Esto borra TODO, incluido el registro histórico de participantes. ¿Seguro?')) return;
+  if(!confirm('Última confirmación: se pierde el registro completo. ¿Continuar?')) return;
+  const res = await fetch('/api/admin/wipe', {method:'POST'}).then(r=>r.json());
+  if(res.ok){ msg($('resetMsg'), '✓ Base de datos vaciada por completo'); loadActive(); loadRegistry(); }
+});
+
+loadActive(); loadRegistry();
+setInterval(()=>{ loadActive(); }, 4000);
+</script>
+</body>
+</html>

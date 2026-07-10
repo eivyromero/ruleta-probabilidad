@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Apostar — Ruleta de la Probabilidad</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;600;700;800&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --felt-dark:#0a2f24; --felt:#0f4536; --gold:#cba135; --gold-bright:#e8c766; --cream:#f2e9d8;
+    --red:#a8283b; --red-bright:#c8324a; --black-p:#141414; --panel:#0d2a21; --line:rgba(203,161,53,0.25);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{margin:0;background:radial-gradient(ellipse at 50% -10%, #163f31 0%, var(--felt-dark) 55%, #071f18 100%);
+    font-family:'Inter',sans-serif;color:var(--cream);min-height:100vh;padding:18px 14px 120px;}
+  h1{font-family:'Playfair Display',serif;font-weight:900;font-size:24px;text-align:center;margin:6px 0 2px;
+    background:linear-gradient(180deg,var(--gold-bright),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .sub{text-align:center;font-size:12.5px;color:#a89f86;margin-bottom:16px;}
+
+  #joinScreen{max-width:360px;margin:60px auto 0;text-align:center;}
+  #joinScreen input{width:100%;padding:14px;border-radius:10px;border:1px solid var(--line);
+    background:rgba(255,255,255,0.05);color:var(--cream);font-family:'Roboto Mono',monospace;font-size:15px;margin-bottom:12px;}
+  #joinScreen button{width:100%;padding:14px;border:none;border-radius:999px;
+    background:linear-gradient(180deg,var(--gold-bright),var(--gold));color:#1a1305;
+    font-family:'Inter',sans-serif;font-weight:800;font-size:15px;cursor:pointer;}
+
+  #gameScreen{display:none;max-width:460px;margin:0 auto;}
+
+  .coin-bar{display:flex;justify-content:center;gap:14px;margin-bottom:12px;flex-wrap:wrap;}
+  .coin-pill{background:rgba(0,0,0,0.25);border:1px solid var(--line);padding:8px 16px;border-radius:999px;
+    font-family:'Roboto Mono',monospace;font-size:13px;font-weight:700;}
+  .coin-pill .n{color:var(--gold-bright);font-size:16px;}
+
+  /* Selector de monto por apuesta */
+  .stake-bar{display:flex;justify-content:center;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+  .stake-bar .lbl{font-family:'Roboto Mono',monospace;font-size:11px;color:#a89f86;}
+  .stake-chip{width:42px;height:42px;border-radius:50%;border:2px solid var(--line);cursor:pointer;
+    background:rgba(255,255,255,0.04);color:var(--cream);font-family:'Roboto Mono',monospace;font-weight:700;font-size:14px;
+    display:flex;align-items:center;justify-content:center;transition:transform .12s;}
+  .stake-chip.active{border-color:var(--gold-bright);background:radial-gradient(circle at 50% 30%,var(--gold-bright),var(--gold));
+    color:#1a1305;box-shadow:0 0 0 3px rgba(232,199,102,0.25);transform:scale(1.08);}
+
+  .board-wrap{background:rgba(0,0,0,0.18);border:1px solid var(--line);border-radius:14px;padding:10px 6px;margin-bottom:14px;overflow-x:auto;}
+  .num-grid{display:grid;grid-template-columns:30px repeat(12,1fr);grid-template-rows:repeat(3,1fr);gap:2px;min-width:440px;}
+  .cell-zero{grid-row:1/span 3;grid-column:1;background:linear-gradient(160deg,#1c7a4c,#0e4a2e);border-radius:6px;
+    display:flex;align-items:center;justify-content:center;font-family:'Roboto Mono',monospace;font-weight:800;font-size:13px;
+    color:var(--cream);cursor:pointer;border:2px solid transparent;writing-mode:vertical-rl;position:relative;}
+  .cell-num{display:flex;align-items:center;justify-content:center;font-family:'Roboto Mono',monospace;font-weight:700;
+    font-size:11px;color:var(--cream);border-radius:5px;cursor:pointer;border:2px solid transparent;min-height:28px;position:relative;}
+  .cell-num.red{background:linear-gradient(160deg,var(--red-bright),var(--red));}
+  .cell-num.black{background:linear-gradient(160deg,#2b2b2b,var(--black-p));}
+  .cell-num.selected,.cell-zero.selected{border-color:var(--gold-bright);
+    box-shadow:0 0 0 2px rgba(232,199,102,0.35),0 4px 10px rgba(0,0,0,0.5);transform:translateY(-2px) scale(1.05);}
+
+  .outside-bets{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:8px;min-width:440px;}
+  .cell-outside{font-family:'Roboto Mono',monospace;font-weight:700;font-size:11px;padding:9px 4px;text-align:center;
+    border-radius:6px;cursor:pointer;background:rgba(255,255,255,0.04);color:var(--cream);border:2px solid var(--line);position:relative;}
+  .cell-outside.selected{border-color:var(--gold-bright);background:rgba(232,199,102,0.14);}
+
+  /* Badge que muestra CUÁNTAS monedas van en esa casilla */
+  .stake-badge{position:absolute;top:-9px;right:-7px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;
+    background:radial-gradient(circle at 50% 30%,var(--gold-bright),var(--gold));color:#1a1305;
+    font-family:'Roboto Mono',monospace;font-weight:700;font-size:10px;line-height:18px;text-align:center;
+    box-shadow:0 2px 5px rgba(0,0,0,0.5);border:1px solid #6b4f14;}
+  .cell-outside .stake-badge{top:-8px;right:2px;}
+
+  /* Cuando ya confirmó, todo el tablero se bloquea */
+  .board-locked .cell-num,.board-locked .cell-zero,.board-locked .cell-outside{pointer-events:none;}
+  .board-locked{opacity:0.85;}
+
+  .status-line{text-align:center;font-family:'Roboto Mono',monospace;font-size:12px;color:#c9c0a8;margin-bottom:10px;min-height:20px;}
+  .status-line.waiting{color:var(--gold-bright);}
+
+  /* Historial de números que ya salieron (visible para el jugador) */
+  .hist-panel{background:rgba(0,0,0,0.18);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:12px;}
+  .hist-title{font-family:'Roboto Mono',monospace;font-size:10.5px;color:#a89f86;text-transform:uppercase;
+    letter-spacing:0.08em;margin-bottom:8px;text-align:center;}
+  .hist-strip{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;}
+  .hist-chip{flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-family:'Roboto Mono',monospace;font-weight:700;font-size:11px;color:#fff;border:1px solid rgba(255,255,255,0.12);}
+  .hist-chip.rojo{background:linear-gradient(160deg,var(--red-bright),var(--red));}
+  .hist-chip.negro{background:linear-gradient(160deg,#2b2b2b,var(--black-p));}
+  .hist-chip.verde{background:linear-gradient(160deg,#1c7a4c,#0e4a2e);}
+  .hist-chip.latest{box-shadow:0 0 0 2px var(--gold-bright);}
+  .hist-empty{font-family:'Roboto Mono',monospace;font-size:11px;color:#7d7458;text-align:center;padding:4px 0;}
+
+  /* Barra fija de confirmación abajo */
+  .confirm-bar{position:fixed;left:0;right:0;bottom:0;padding:12px 14px calc(12px + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg,rgba(7,31,24,0.4),rgba(7,31,24,0.96) 40%);backdrop-filter:blur(6px);
+    border-top:1px solid var(--line);z-index:50;}
+  .confirm-inner{max-width:460px;margin:0 auto;display:flex;flex-direction:column;gap:6px;}
+  .bet-summary{display:flex;justify-content:space-between;font-family:'Roboto Mono',monospace;font-size:12px;color:#c9c0a8;}
+  .bet-summary b{color:var(--gold-bright);}
+  .confirm-btn{width:100%;padding:15px;border:none;border-radius:999px;cursor:pointer;
+    background:linear-gradient(180deg,var(--gold-bright),var(--gold));color:#1a1305;
+    font-family:'Inter',sans-serif;font-weight:800;font-size:15px;letter-spacing:0.02em;
+    box-shadow:0 8px 20px -6px rgba(203,161,53,0.5);transition:opacity .15s;}
+  .confirm-btn:disabled{opacity:0.4;cursor:not-allowed;box-shadow:none;}
+  .confirm-btn.locked{background:linear-gradient(180deg,#2f6b4f,#1c4a37);color:var(--cream);}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(4,12,9,0.85);display:none;align-items:center;justify-content:center;
+    z-index:100;padding:20px;backdrop-filter:blur(3px);}
+  .modal-overlay.show{display:flex;}
+  .modal-card{background:radial-gradient(circle at 50% 0%, #1a5a3f, var(--panel) 70%);border:1px solid var(--gold);
+    border-radius:22px;padding:28px 24px;max-width:340px;width:100%;text-align:center;box-shadow:0 30px 70px rgba(0,0,0,0.6);
+    animation:popIn .35s cubic-bezier(.2,.9,.3,1.3);}
+  @keyframes popIn{from{transform:scale(.7);opacity:0;}to{transform:scale(1);opacity:1;}}
+  .modal-emoji{font-size:42px;margin-bottom:4px;}
+  .modal-title{font-family:'Playfair Display',serif;font-weight:900;font-size:23px;
+    background:linear-gradient(180deg,var(--gold-bright),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:8px;}
+  .modal-body{font-family:'Roboto Mono',monospace;font-size:12.5px;color:var(--cream);line-height:1.7;margin-bottom:16px;}
+  .modal-body .win-line{color:#5be08a;font-weight:700;}
+  .modal-body .lose-line{color:#e88a97;}
+  .modal-close{border:none;border-radius:999px;padding:10px 28px;cursor:pointer;
+    background:linear-gradient(180deg,var(--gold-bright),var(--gold));color:#1a1305;font-family:'Inter',sans-serif;font-weight:800;font-size:13px;}
+</style>
+</head>
+<body>
+
+<div id="joinScreen">
+  <h1>🎡 Ruleta de la Probabilidad</h1>
+  <p class="sub">Ingresa tu nombre para empezar a apostar</p>
+  <input id="nameInput" placeholder="Tu nombre" maxlength="24" autocomplete="off">
+  <button id="joinBtn">Entrar a jugar</button>
+</div>
+
+<div id="gameScreen">
+  <h1>🎡 Ruleta</h1>
+  <p class="sub" id="welcomeMsg"></p>
+  <div class="coin-bar">
+    <div class="coin-pill">🪙 Monedas: <span class="n" id="coinBalance">20</span></div>
+  </div>
+
+  <div class="stake-bar">
+    <span class="lbl">Monto por apuesta:</span>
+    <div class="stake-chip" data-stake="1">1</div>
+    <div class="stake-chip active" data-stake="2">2</div>
+    <div class="stake-chip" data-stake="4">4</div>
+    <div class="stake-chip" data-stake="8">8</div>
+  </div>
+
+  <div class="hist-panel">
+    <div class="hist-title">Números que ya salieron</div>
+    <div class="hist-strip" id="histStrip"><div class="hist-empty">Aún no hay tiradas</div></div>
+  </div>
+
+  <div class="board-wrap" id="boardWrap">
+    <div class="num-grid" id="numGrid"></div>
+    <div class="outside-bets" id="outsideBets">
+      <div class="cell-outside" data-type="color" data-value="rojo" data-payout="1">🔴 Rojo (1:1)</div>
+      <div class="cell-outside" data-type="color" data-value="negro" data-payout="1">⚫ Negro (1:1)</div>
+      <div class="cell-outside" data-type="parity" data-value="par" data-payout="1">Par (1:1)</div>
+      <div class="cell-outside" data-type="parity" data-value="impar" data-payout="1">Impar (1:1)</div>
+      <div class="cell-outside" data-type="half" data-value="bajo" data-payout="1">1–18 (1:1)</div>
+      <div class="cell-outside" data-type="half" data-value="alto" data-payout="1">19–36 (1:1)</div>
+      <div class="cell-outside" data-type="dozen" data-value="d1" data-payout="2">1ª doc. (2:1)</div>
+      <div class="cell-outside" data-type="dozen" data-value="d2" data-payout="2">2ª doc. (2:1)</div>
+      <div class="cell-outside" data-type="dozen" data-value="d3" data-payout="2">3ª doc. (2:1)</div>
+    </div>
+  </div>
+
+  <div class="status-line" id="statusLine">Elige el monto, toca tus casillas y confirma abajo 👇</div>
+</div>
+
+<div class="confirm-bar" id="confirmBar" style="display:none;">
+  <div class="confirm-inner">
+    <div class="bet-summary">
+      <span>Apostado: <b id="stakedTotal">0</b> 🪙 · <span id="betCount">0</span> apuesta(s)</span>
+      <span>Saldo libre: <b id="freeBalance">20</b> 🪙</span>
+    </div>
+    <button class="confirm-btn" id="confirmBtn" disabled>Confirmar apuestas</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="winModal">
+  <div class="modal-card">
+    <div class="modal-emoji" id="modalEmoji">🏆</div>
+    <div class="modal-title" id="modalTitle">¡GANADOR!</div>
+    <div class="modal-body" id="modalBody"></div>
+    <button class="modal-close" id="modalClose">Continuar</button>
+  </div>
+</div>
+
+<script>
+const RED_NUMS = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+function colorOf(num){ if(num===0) return 'verde'; return RED_NUMS.has(num) ? 'rojo' : 'negro'; }
+
+let playerName = localStorage.getItem('ruletaPlayerName') || '';
+let coins = 20;
+let currentStake = 2;                 // monto activo del selector
+let selections = {};                  // key -> {type, value, payout, stake, el}
+let confirmed = false;                // ¿ya confirmó esta ronda?
+let lastSeenSpin = 0;
+
+const joinScreen = document.getElementById('joinScreen');
+const gameScreen = document.getElementById('gameScreen');
+const nameInput = document.getElementById('nameInput');
+const coinBalanceEl = document.getElementById('coinBalance');
+const statusLine = document.getElementById('statusLine');
+const boardWrap = document.getElementById('boardWrap');
+const confirmBar = document.getElementById('confirmBar');
+const confirmBtn = document.getElementById('confirmBtn');
+const stakedTotalEl = document.getElementById('stakedTotal');
+const betCountEl = document.getElementById('betCount');
+const freeBalanceEl = document.getElementById('freeBalance');
+const winModal = document.getElementById('winModal');
+const modalTitle = document.getElementById('modalTitle');
+const modalBody = document.getElementById('modalBody');
+const modalEmoji = document.getElementById('modalEmoji');
+
+async function join(name){
+  const res = await fetch('/api/join', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name})}).then(r=>r.json());
+  if(res.error){ alert(res.error); return; }
+  playerName = res.name;
+  coins = res.coins;
+  localStorage.setItem('ruletaPlayerName', playerName);
+  document.getElementById('welcomeMsg').textContent = `Jugando como ${playerName}`;
+  joinScreen.style.display = 'none';
+  gameScreen.style.display = 'block';
+  confirmBar.style.display = 'block';
+  coinBalanceEl.textContent = coins;
+  refreshSummary();
+  pollState();
+  setInterval(pollState, 1800);
+}
+
+document.getElementById('joinBtn').addEventListener('click', ()=>{
+  const name = nameInput.value.trim();
+  if(!name){ nameInput.focus(); return; }
+  join(name);
+});
+nameInput.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('joinBtn').click(); });
+
+// selector de monto
+document.querySelectorAll('.stake-chip').forEach(chip=>{
+  chip.addEventListener('click', ()=>{
+    if(confirmed) return;
+    document.querySelectorAll('.stake-chip').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+    currentStake = Number(chip.dataset.stake);
+  });
+});
+
+// construir cuadrícula de números
+const numGrid = document.getElementById('numGrid');
+const zeroCell = document.createElement('div');
+zeroCell.className = 'cell-zero'; zeroCell.textContent = '0';
+zeroCell.dataset.type='number'; zeroCell.dataset.value='0'; zeroCell.dataset.payout='35';
+numGrid.appendChild(zeroCell);
+for(let row=0; row<3; row++){
+  for(let col=0; col<12; col++){
+    const num = col*3 + (3-row);
+    const cell = document.createElement('div');
+    cell.className = 'cell-num ' + (colorOf(num)==='rojo' ? 'red' : 'black');
+    cell.textContent = num;
+    cell.dataset.type='number'; cell.dataset.value=String(num); cell.dataset.payout='35';
+    cell.style.gridColumn = String(col+2); cell.style.gridRow = String(row+1);
+    numGrid.appendChild(cell);
+  }
+}
+
+function betKey(type,value){ return type+':'+value; }
+
+function stakedTotal(){ return Object.values(selections).reduce((s,b)=>s+b.stake,0); }
+
+function setBadge(el, stake){
+  let badge = el.querySelector('.stake-badge');
+  if(!badge){ badge = document.createElement('span'); badge.className='stake-badge'; el.appendChild(badge); }
+  badge.textContent = stake;
+}
+function clearBadge(el){ const b = el.querySelector('.stake-badge'); if(b) b.remove(); }
+
+function refreshSummary(){
+  const total = stakedTotal();
+  const count = Object.keys(selections).length;
+  stakedTotalEl.textContent = total;
+  betCountEl.textContent = count;
+  freeBalanceEl.textContent = coins - total;
+  coinBalanceEl.textContent = coins;
+  if(confirmed){
+    confirmBtn.textContent = '✓ Apuestas confirmadas — esperando el giro';
+    confirmBtn.classList.add('locked'); confirmBtn.disabled = true;
+  } else {
+    confirmBtn.classList.remove('locked');
+    confirmBtn.textContent = count ? `Confirmar ${total} 🪙 en ${count} apuesta(s)` : 'Confirmar apuestas';
+    confirmBtn.disabled = count === 0;
+  }
+}
+
+function toggleSelect(el){
+  if(confirmed) return;
+  const type = el.dataset.type, value = el.dataset.value, payout = Number(el.dataset.payout);
+  const key = betKey(type,value);
+  if(selections[key]){
+    // ya estaba: quitar
+    delete selections[key];
+    el.classList.remove('selected');
+    clearBadge(el);
+  } else {
+    // validar saldo antes de agregar
+    if(stakedTotal() + currentStake > coins){
+      statusLine.textContent = 'No te alcanzan las monedas para esa apuesta 🪙';
+      statusLine.classList.remove('waiting');
+      return;
+    }
+    selections[key] = {type, value, payout, stake: currentStake, el};
+    el.classList.add('selected');
+    setBadge(el, currentStake);
+  }
+  statusLine.classList.remove('waiting');
+  statusLine.textContent = Object.keys(selections).length
+    ? 'Ajusta tus fichas y pulsa Confirmar cuando estés listo'
+    : 'Elige el monto, toca tus casillas y confirma abajo 👇';
+  refreshSummary();
+}
+
+document.querySelectorAll('#numGrid .cell-num, #numGrid .cell-zero, .cell-outside').forEach(cell=>{
+  cell.addEventListener('click', ()=>toggleSelect(cell));
+});
+
+async function confirmBets(){
+  if(confirmed) return;
+  const bets = Object.values(selections).map(b=>({type:b.type, value:b.value, payout:b.payout, stake:b.stake}));
+  if(!bets.length) return;
+  confirmBtn.disabled = true;
+  const res = await fetch('/api/bets', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name: playerName, bets})}).then(r=>r.json());
+  if(res.error){ statusLine.textContent = res.error; confirmBtn.disabled = false; return; }
+  coins = res.coins;                 // saldo ya descontado en el servidor
+  confirmed = true;
+  boardWrap.classList.add('board-locked');
+  document.querySelectorAll('.stake-chip').forEach(c=>c.style.opacity='0.4');
+  statusLine.classList.add('waiting');
+  statusLine.textContent = '🔒 Apuestas cerradas — esperando que el anfitrión gire la ruleta';
+  refreshSummary();
+}
+confirmBtn.addEventListener('click', confirmBets);
+
+function betLabel(b){
+  const map = {rojo:'Rojo', negro:'Negro', par:'Par', impar:'Impar', bajo:'1–18', alto:'19–36', d1:'1ª docena', d2:'2ª docena', d3:'3ª docena'};
+  return b.type==='number' ? `Número ${b.value}` : (map[b.value] || b.value);
+}
+
+function resetForNextRound(){
+  Object.values(selections).forEach(b=>{ b.el.classList.remove('selected'); clearBadge(b.el); });
+  selections = {};
+  confirmed = false;
+  boardWrap.classList.remove('board-locked');
+  document.querySelectorAll('.stake-chip').forEach(c=>c.style.opacity='1');
+  statusLine.classList.remove('waiting');
+  statusLine.textContent = 'Elige el monto, toca tus casillas y confirma abajo 👇';
+  refreshSummary();
+}
+
+function renderHistory(history){
+  const strip = document.getElementById('histStrip');
+  if(!history || !history.length){
+    strip.innerHTML = '<div class="hist-empty">Aún no hay tiradas</div>';
+    return;
+  }
+  strip.innerHTML = history.map((h,i)=>
+    `<div class="hist-chip ${h.color} ${i===0?'latest':''}">${h.number}</div>`
+  ).join('');
+}
+
+async function pollState(){
+  if(!playerName) return;
+  const res = await fetch(`/api/state?name=${encodeURIComponent(playerName)}&since_spin=${lastSeenSpin}`).then(r=>r.json());
+  if(res.error) return;
+  coins = res.coins;
+  renderHistory(res.history);
+
+  if(res.resolved && res.resolved.length){
+    // el giro ya se reveló (pasó el REVEAL_DELAY): recién ahora mostramos gano/pierdo
+    const won = res.resolved.filter(b=>b.won);
+    const totalReturn = won.reduce((s,b)=>s+b.return_amount,0);
+    const totalStaked = res.resolved.reduce((s,b)=>s+b.stake,0);
+    modalEmoji.textContent = won.length ? '🏆' : '🎲';
+    modalTitle.textContent = won.length ? '¡GANASTE!' : 'Sin premio esta vez';
+    if(won.length){
+      modalBody.innerHTML = won.map(b=>`<span class="win-line">✓ ${betLabel(b)} (${b.stake}🪙) → +${b.return_amount} 🪙</span>`).join('<br>')
+        + `<br><br>Total recuperado: <b>${totalReturn} monedas</b>`;
+    } else {
+      modalBody.innerHTML = `<span class="lose-line">Ninguna de tus ${res.resolved.length} apuesta(s) coincidió.</span><br>Perdiste ${totalStaked} 🪙. ¡Vuelve a intentar!`;
+    }
+    winModal.classList.add('show');
+    lastSeenSpin = res.latest_spin_id;
+    resetForNextRound();
+  } else if(res.latest_spin_id > lastSeenSpin){
+    lastSeenSpin = res.latest_spin_id;
+  }
+
+  // sincronizar estado de bloqueo con el servidor (por si recargó la página)
+  const hasPending = res.pending && res.pending.length;
+  if(hasPending && !confirmed){
+    // ya tenía apuestas confirmadas en el servidor pero el front no lo sabía
+    confirmed = true;
+    boardWrap.classList.add('board-locked');
+    statusLine.classList.add('waiting');
+    statusLine.textContent = '🔒 Apuestas cerradas — esperando el giro';
+  }
+  refreshSummary();
+}
+
+document.getElementById('modalClose').addEventListener('click', ()=>{ winModal.classList.remove('show'); });
+
+// re-ingreso automático si este celular ya tiene nombre guardado
+if(playerName){ nameInput.value = playerName; join(playerName); }
+</script>
+</body>
+</html>
