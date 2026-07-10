@@ -96,7 +96,25 @@
   /* Gráficos */
   .chart-box{position:relative;height:230px;}
   .chart-note{font-family:'Roboto Mono',monospace;font-size:10.5px;color:#8a8271;line-height:1.6;margin:10px 0 0;}
- 
+
+  /* Dona por color */
+  .donut-wrap{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+  .donut-wrap .chart-box{flex:1 1 180px;min-width:160px;}
+  .donut-legend{display:flex;flex-direction:column;gap:8px;font-family:'Roboto Mono',monospace;font-size:12px;}
+  .donut-legend .li{display:flex;align-items:center;gap:8px;}
+  .donut-legend .dot{width:12px;height:12px;border-radius:3px;flex:0 0 auto;}
+  .donut-legend .li b{color:var(--gold-bright);}
+
+  /* Tabla f(x) */
+  .fx-table{width:100%;border-collapse:collapse;font-family:'Roboto Mono',monospace;font-size:12px;}
+  .fx-table th{text-align:right;color:#a89f86;font-weight:500;padding:7px 6px;border-bottom:1px solid var(--line);
+    font-size:10px;text-transform:uppercase;}
+  .fx-table th:first-child{text-align:left;}
+  .fx-table td{padding:8px 6px;border-bottom:1px solid rgba(255,255,255,0.05);text-align:right;}
+  .fx-table td:first-child{text-align:left;font-weight:700;}
+  .fx-table tfoot td{border-top:1px solid var(--line);border-bottom:none;color:var(--gold-bright);font-weight:700;}
+  .fx-empty{color:#7d7458;text-align:center !important;padding:14px 0 !important;}
+  .fx-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle;}
 
   .qr-box{display:flex;align-items:center;gap:16px;}
   .qr-box img{width:120px;height:120px;border-radius:10px;background:#fff;padding:6px;}
@@ -147,9 +165,35 @@
         Total de tiradas: <b id="spinCount">0</b> · Apuestas resueltas: <b id="betsResolved">0</b>
       </div>
     </div>
-    <button class="spin-btn" id="spinBtn"> Girar la ruleta</button>
+    <button class="spin-btn" id="spinBtn">🎯 Girar la ruleta</button>
     <div class="subhint">Solo el anfitrión gira — los jugadores apuestan desde su celular</div>
     <div class="history-strip" id="historyStrip"></div>
+
+    <div class="panel" style="margin-top:20px;">
+      <h2>🍩 Reparto por color</h2>
+      <div class="donut-wrap">
+        <div class="chart-box" style="height:200px;"><canvas id="donutChart"></canvas></div>
+        <div class="donut-legend" id="donutLegend"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>📊 Teórica vs. experimental</h2>
+      <div class="chart-box" style="height:210px;"><canvas id="compareChart"></canvas></div>
+      <p class="chart-note">Barra clara = lo que la teoría predice · barra sólida = lo que realmente salió.
+        Con más tiradas, ambas se emparejan.</p>
+    </div>
+
+    <div class="panel">
+      <h2>Σ Función de probabilidad f(x)</h2>
+      <table class="fx-table">
+        <thead><tr><th>Suceso</th><th>Frec.</th><th>f(x) exp.</th><th>P(x) teór.</th><th>Dif.</th></tr></thead>
+        <tbody id="fxBody"><tr><td colspan="5" class="fx-empty">Aún no hay tiradas</td></tr></tbody>
+        <tfoot><tr><td>Σ</td><td id="fxTotalN">0</td><td id="fxSumFx">—</td><td>1.000</td><td></td></tr></tfoot>
+      </table>
+      <p class="chart-note">Condición de la función de probabilidad: Σ f(x) = 1. La columna f(x)
+        es la frecuencia relativa (probabilidad experimental) de cada suceso.</p>
+    </div>
   </div>
 
   <div class="side">
@@ -183,7 +227,7 @@
     </div>
 
     <div class="panel">
-      <h2> Variable aleatoria X = número</h2>
+      <h2>📐 Variable aleatoria X = número</h2>
       <div class="moments">
         <div class="moment-card">
           <div class="m-lbl">Esperanza E[X] = Σ x·f(x)</div>
@@ -199,14 +243,7 @@
     </div>
 
     <div class="panel">
-      <h2> Distribución de frecuencias (cada número)</h2>
-      <div class="chart-box" style="height:210px;"><canvas id="freqChart"></canvas></div>
-      <p class="chart-note">Frecuencia con que ha salido cada número. En una ruleta justa todas
-        las barras tienden a igualarse; el <b style="color:#5be08a;">0</b> va resaltado en verde.</p>
-    </div>
-
-    <div class="panel">
-      <h2> Monedas por jugador (ronda actual)</h2>
+      <h2>📊 Monedas por jugador (ronda actual)</h2>
       <div class="chart-box"><canvas id="barChart"></canvas></div>
       <p class="chart-note" id="barNote">Se reinicia con cada nueva ronda.</p>
     </div>
@@ -222,7 +259,7 @@
       <a href="/admin" target="_blank" style="border:1px solid var(--line);background:transparent;color:var(--gold-bright);
         font-family:'Roboto Mono',monospace;font-size:12px;padding:9px 18px;border-radius:999px;
         text-decoration:none;display:inline-block;">
-         Panel de control (recargas y reinicio)
+        🔐 Panel de control (recargas y reinicio)
       </a>
     </div>
   </div>
@@ -350,48 +387,93 @@ async function refreshStats(){
     chiVal.textContent = s.chi2;
     if(s.verdict === 'normal'){
       verdictBox.className = 'verdict verdict-ok';
-      verdictBox.textContent = ' No hay evidencia de sesgo — la ruleta se comporta como se espera';
+      verdictBox.textContent = '✅ No hay evidencia de sesgo — la ruleta se comporta como se espera';
     } else {
       verdictBox.className = 'verdict verdict-warn';
-      verdictBox.textContent = ' Los resultados se alejan de lo esperado (revisar con más tiradas)';
+      verdictBox.textContent = '⚠️ Los resultados se alejan de lo esperado (revisar con más tiradas)';
     }
   }
 
-  
   // esperanza y desviación experimentales (variable aleatoria discreta)
   document.getElementById('expMean').textContent = s.exp_mean !== null ? s.exp_mean : '—';
   document.getElementById('expStd').textContent  = s.exp_std  !== null ? s.exp_std  : '—';
 
-  renderFreqChart(s.freq_numbers);
+  renderColorViz(s);
   renderLineChart(s.convergence);
   refreshPlayersChart();
 }
 
-// ---------------------------- histograma de frecuencias por número (0–36)
-let freqChart = null;
-function renderFreqChart(freq){
-  const ctx = document.getElementById('freqChart');
-  if(!freq) return;
-  const labels = Array.from({length:37}, (_,i)=>i);
-  const colors = labels.map(n=> n===0 ? '#5be08a' : (RED_NUMS.has(n) ? '#c8324a' : '#cfcfcf'));
-  const data = {
-    labels,
-    datasets:[{label:'Frecuencia', data:freq, backgroundColor:colors, borderWidth:0,
-      barPercentage:1.0, categoryPercentage:0.92}]
+// datos de color: frecuencias y probabilidades teóricas (ruleta europea)
+const P_ROJO = 18/37, P_NEGRO = 18/37, P_VERDE = 1/37;
+let donutChart = null, compareChart = null;
+
+function renderColorViz(s){
+  const total = s.total || 0;
+  const obs = {rojo:s.red, negro:s.black, verde:s.green};
+  const teo = {rojo:P_ROJO, negro:P_NEGRO, verde:P_VERDE};
+  const COL = {rojo:'#c8324a', negro:'#3a3a3a', verde:'#1c9c5f'};
+
+  // --- Dona
+  const dctx = document.getElementById('donutChart');
+  const dData = {
+    labels:['Rojo','Negro','Verde'],
+    datasets:[{data:[s.red, s.black, s.green],
+      backgroundColor:[COL.rojo, COL.negro, COL.verde], borderColor:'#0a2f24', borderWidth:2}]
   };
-  const options = {
-    responsive:true, maintainAspectRatio:false, animation:{duration:250},
-    scales:{
-      x:{grid:{display:false}, ticks:{...TICK, autoSkip:true, maxRotation:0, font:{...CHART_FONT, size:8}}},
-      y:{beginAtZero:true, grid:GRID, ticks:{...TICK, precision:0}}
-    },
+  const dOpts = {responsive:true, maintainAspectRatio:false, cutout:'58%',
     plugins:{legend:{display:false},
-      tooltip:{callbacks:{title:items=>'Número '+items[0].label,
-        label:it=>'Salió '+it.raw+' vez(ces)'}}}
+      tooltip:{callbacks:{label:it=>`${it.label}: ${it.raw} (${total?(it.raw/total*100).toFixed(1):0}%)`}}}};
+  if(donutChart){ donutChart.data = dData; donutChart.update('none'); }
+  else { donutChart = new Chart(dctx, {type:'doughnut', data:dData, options:dOpts}); }
+
+  // leyenda de la dona
+  document.getElementById('donutLegend').innerHTML = ['rojo','negro','verde'].map(k=>{
+    const pct = total ? (obs[k]/total*100).toFixed(1) : '0.0';
+    const name = k.charAt(0).toUpperCase()+k.slice(1);
+    return `<div class="li"><span class="dot" style="background:${COL[k]}"></span>
+      ${name}: <b>${obs[k]}</b> (${pct}%)</div>`;
+  }).join('');
+
+  // --- Barras teórica vs experimental (en %)
+  const cctx = document.getElementById('compareChart');
+  const expPct = ['rojo','negro','verde'].map(k=> total ? obs[k]/total*100 : 0);
+  const teoPct = ['rojo','negro','verde'].map(k=> teo[k]*100);
+  const cData = {
+    labels:['Rojo','Negro','Verde'],
+    datasets:[
+      {label:'Teórica', data:teoPct, backgroundColor:'rgba(232,199,102,0.35)', borderColor:'#e8c766', borderWidth:1},
+      {label:'Experimental', data:expPct, backgroundColor:[COL.rojo,COL.negro,COL.verde], borderWidth:0},
+    ]
   };
-  if(freqChart){ freqChart.data = data; freqChart.update('none'); }
-  else { freqChart = new Chart(ctx, {type:'bar', data, options}); }
+  const cOpts = {responsive:true, maintainAspectRatio:false, animation:{duration:300},
+    scales:{x:{grid:{display:false}, ticks:TICK},
+      y:{beginAtZero:true, grid:GRID, ticks:{...TICK, callback:v=>v+'%'}}},
+    plugins:{legend:{labels:{color:'#c9c0a8', font:CHART_FONT, boxWidth:12}}}};
+  if(compareChart){ compareChart.data = cData; compareChart.update('none'); }
+  else { compareChart = new Chart(cctx, {type:'bar', data:cData, options:cOpts}); }
+
+  // --- Tabla f(x)
+  const body = document.getElementById('fxBody');
+  if(!total){
+    body.innerHTML = '<tr><td colspan="5" class="fx-empty">Aún no hay tiradas</td></tr>';
+    document.getElementById('fxTotalN').textContent = '0';
+    document.getElementById('fxSumFx').textContent = '—';
+  } else {
+    const rows = [['Rojo',COL.rojo,s.red,teo.rojo], ['Negro',COL.negro,s.black,teo.negro], ['Verde',COL.verde,s.green,teo.verde]];
+    body.innerHTML = rows.map(([name,color,f,p])=>{
+      const fx = f/total, dif = fx - p;
+      const sign = dif>=0 ? '+' : '';
+      return `<tr>
+        <td><span class="fx-dot" style="background:${color}"></span>${name}</td>
+        <td>${f}</td><td>${fx.toFixed(3)}</td><td>${p.toFixed(3)}</td>
+        <td style="color:${Math.abs(dif)<0.05?'#8a8271':(dif>=0?'#5be08a':'#e88a97')}">${sign}${dif.toFixed(3)}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('fxTotalN').textContent = total;
+    document.getElementById('fxSumFx').textContent = '1.000';
+  }
 }
+
 // ------------------------------------------------ gráficos (Chart.js)
 const CHART_FONT = {family:"'Roboto Mono', monospace", size:10};
 const GRID = {color:'rgba(255,255,255,0.06)'};
@@ -401,7 +483,7 @@ let barChart = null, lineChart = null;
 function renderLineChart(conv){
   const ctx = document.getElementById('lineChart');
   const labels = conv.map(c=>c.spin);
-  const redrenderResultsTable(s.results_table);Data = conv.map(c=>c.red_pct);
+  const redData = conv.map(c=>c.red_pct);
   const blackData = conv.map(c=>c.black_pct);
   const theoretical = conv.map(()=>48.65);
 

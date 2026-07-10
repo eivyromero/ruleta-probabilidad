@@ -331,7 +331,7 @@ async function confirmBets(){
   boardWrap.classList.add('board-locked');
   document.querySelectorAll('.stake-chip').forEach(c=>c.style.opacity='0.4');
   statusLine.classList.add('waiting');
-  statusLine.textContent = ' Apuestas cerradas — esperando que el anfitrión gire la ruleta';
+  statusLine.textContent = '🔒 Apuestas cerradas — esperando que el anfitrión gire la ruleta';
   refreshSummary();
 }
 confirmBtn.addEventListener('click', confirmBets);
@@ -397,7 +397,7 @@ async function pollState(){
     confirmed = true;
     boardWrap.classList.add('board-locked');
     statusLine.classList.add('waiting');
-    statusLine.textContent = ' Apuestas cerradas — esperando el giro';
+    statusLine.textContent = '🔒 Apuestas cerradas — esperando el giro';
   }
   refreshSummary();
 }
