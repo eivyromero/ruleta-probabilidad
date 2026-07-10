@@ -85,22 +85,18 @@
   .panel{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:20px;}
   .panel h2{font-family:'Playfair Display',serif;font-size:18px;margin:0 0 10px;color:var(--gold-bright);}
 
-  /* Tabla de resultados */
-  .res-table{width:100%;border-collapse:collapse;font-family:'Roboto Mono',monospace;font-size:12.5px;}
-  .res-table th{position:sticky;top:0;background:#0d2a21;text-align:left;color:#a89f86;font-weight:500;
-    padding:7px 6px;border-bottom:1px solid var(--line);font-size:10.5px;text-transform:uppercase;}
-  .res-table td{padding:8px 6px;border-bottom:1px solid rgba(255,255,255,0.05);}
-  .res-table tr:last-child td{border-bottom:none;}
-  .num-chip{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;
-    font-weight:700;font-size:11px;color:#fff;}
-  .num-chip.rojo{background:linear-gradient(160deg,#c8324a,#a8283b);}
-  .num-chip.negro{background:linear-gradient(160deg,#2b2b2b,#141414);}
-  .num-chip.verde{background:linear-gradient(160deg,#1c7a4c,#0e4a2e);}
-  .empty-row{color:#7d7458;text-align:center;padding:16px 0 !important;}
+  /* Tarjetas de esperanza / desviación */
+  .moments{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px;}
+  .moment-card{background:rgba(0,0,0,0.2);border:1px solid var(--line);border-radius:10px;padding:12px;}
+  .m-lbl{font-family:'Roboto Mono',monospace;font-size:10px;color:#a89f86;margin-bottom:6px;line-height:1.3;}
+  .m-val{font-family:'Playfair Display',serif;font-weight:900;font-size:26px;color:var(--gold-bright);}
+  .m-theo{font-family:'Roboto Mono',monospace;font-size:11px;font-weight:500;color:#8a8271;}
+  @media(max-width:520px){ .moments{grid-template-columns:1fr;} }
 
   /* Gráficos */
   .chart-box{position:relative;height:230px;}
   .chart-note{font-family:'Roboto Mono',monospace;font-size:10.5px;color:#8a8271;line-height:1.6;margin:10px 0 0;}
+ 
 
   .qr-box{display:flex;align-items:center;gap:16px;}
   .qr-box img{width:120px;height:120px;border-radius:10px;background:#fff;padding:6px;}
@@ -151,7 +147,7 @@
         Total de tiradas: <b id="spinCount">0</b> · Apuestas resueltas: <b id="betsResolved">0</b>
       </div>
     </div>
-    <button class="spin-btn" id="spinBtn">🎯 Girar la ruleta</button>
+    <button class="spin-btn" id="spinBtn"> Girar la ruleta</button>
     <div class="subhint">Solo el anfitrión gira — los jugadores apuestan desde su celular</div>
     <div class="history-strip" id="historyStrip"></div>
   </div>
@@ -187,17 +183,30 @@
     </div>
 
     <div class="panel">
-      <h2>📋 Tabla de resultados</h2>
-      <div style="max-height:260px;overflow-y:auto;">
-        <table class="res-table">
-          <thead><tr><th>#</th><th>Número</th><th>Color</th><th>Hora</th></tr></thead>
-          <tbody id="resultsBody"><tr><td colspan="4" class="empty-row">Aún no hay tiradas</td></tr></tbody>
-        </table>
+      <h2> Variable aleatoria X = número</h2>
+      <div class="moments">
+        <div class="moment-card">
+          <div class="m-lbl">Esperanza E[X] = Σ x·f(x)</div>
+          <div class="m-val"><span id="expMean">—</span> <span class="m-theo">/ teórica 18</span></div>
+        </div>
+        <div class="moment-card">
+          <div class="m-lbl">Desviación σ = √(E[X²]−μ²)</div>
+          <div class="m-val"><span id="expStd">—</span> <span class="m-theo">/ teórica 10.68</span></div>
+        </div>
       </div>
+      <p class="chart-note">X es una variable aleatoria discreta (valores 0–36). Con muchas tiradas,
+        la media experimental E[X] se acerca a la teórica (18) y σ a 10.68.</p>
     </div>
 
     <div class="panel">
-      <h2>📊 Monedas por jugador (ronda actual)</h2>
+      <h2> Distribución de frecuencias (cada número)</h2>
+      <div class="chart-box" style="height:210px;"><canvas id="freqChart"></canvas></div>
+      <p class="chart-note">Frecuencia con que ha salido cada número. En una ruleta justa todas
+        las barras tienden a igualarse; el <b style="color:#5be08a;">0</b> va resaltado en verde.</p>
+    </div>
+
+    <div class="panel">
+      <h2> Monedas por jugador (ronda actual)</h2>
       <div class="chart-box"><canvas id="barChart"></canvas></div>
       <p class="chart-note" id="barNote">Se reinicia con cada nueva ronda.</p>
     </div>
@@ -213,7 +222,7 @@
       <a href="/admin" target="_blank" style="border:1px solid var(--line);background:transparent;color:var(--gold-bright);
         font-family:'Roboto Mono',monospace;font-size:12px;padding:9px 18px;border-radius:999px;
         text-decoration:none;display:inline-block;">
-        🔐 Panel de control (recargas y reinicio)
+         Panel de control (recargas y reinicio)
       </a>
     </div>
   </div>
@@ -341,34 +350,48 @@ async function refreshStats(){
     chiVal.textContent = s.chi2;
     if(s.verdict === 'normal'){
       verdictBox.className = 'verdict verdict-ok';
-      verdictBox.textContent = '✅ No hay evidencia de sesgo — la ruleta se comporta como se espera';
+      verdictBox.textContent = ' No hay evidencia de sesgo — la ruleta se comporta como se espera';
     } else {
       verdictBox.className = 'verdict verdict-warn';
-      verdictBox.textContent = '⚠️ Los resultados se alejan de lo esperado (revisar con más tiradas)';
+      verdictBox.textContent = ' Los resultados se alejan de lo esperado (revisar con más tiradas)';
     }
   }
 
-  renderResultsTable(s.results_table);
+  
+  // esperanza y desviación experimentales (variable aleatoria discreta)
+  document.getElementById('expMean').textContent = s.exp_mean !== null ? s.exp_mean : '—';
+  document.getElementById('expStd').textContent  = s.exp_std  !== null ? s.exp_std  : '—';
+
+  renderFreqChart(s.freq_numbers);
   renderLineChart(s.convergence);
   refreshPlayersChart();
 }
 
-// ------------------------------------------------ tabla de resultados
-function renderResultsTable(rows){
-  const body = document.getElementById('resultsBody');
-  if(!rows || !rows.length){
-    body.innerHTML = '<tr><td colspan="4" class="empty-row">Aún no hay tiradas</td></tr>';
-    return;
-  }
-  body.innerHTML = rows.map(r=>`
-    <tr>
-      <td style="color:#8a8271;">${r.spin}</td>
-      <td><span class="num-chip ${r.color}">${r.number}</span></td>
-      <td style="text-transform:capitalize;">${r.color}</td>
-      <td style="color:#8a8271;">${r.time}</td>
-    </tr>`).join('');
+// ---------------------------- histograma de frecuencias por número (0–36)
+let freqChart = null;
+function renderFreqChart(freq){
+  const ctx = document.getElementById('freqChart');
+  if(!freq) return;
+  const labels = Array.from({length:37}, (_,i)=>i);
+  const colors = labels.map(n=> n===0 ? '#5be08a' : (RED_NUMS.has(n) ? '#c8324a' : '#cfcfcf'));
+  const data = {
+    labels,
+    datasets:[{label:'Frecuencia', data:freq, backgroundColor:colors, borderWidth:0,
+      barPercentage:1.0, categoryPercentage:0.92}]
+  };
+  const options = {
+    responsive:true, maintainAspectRatio:false, animation:{duration:250},
+    scales:{
+      x:{grid:{display:false}, ticks:{...TICK, autoSkip:true, maxRotation:0, font:{...CHART_FONT, size:8}}},
+      y:{beginAtZero:true, grid:GRID, ticks:{...TICK, precision:0}}
+    },
+    plugins:{legend:{display:false},
+      tooltip:{callbacks:{title:items=>'Número '+items[0].label,
+        label:it=>'Salió '+it.raw+' vez(ces)'}}}
+  };
+  if(freqChart){ freqChart.data = data; freqChart.update('none'); }
+  else { freqChart = new Chart(ctx, {type:'bar', data, options}); }
 }
-
 // ------------------------------------------------ gráficos (Chart.js)
 const CHART_FONT = {family:"'Roboto Mono', monospace", size:10};
 const GRID = {color:'rgba(255,255,255,0.06)'};
@@ -378,7 +401,7 @@ let barChart = null, lineChart = null;
 function renderLineChart(conv){
   const ctx = document.getElementById('lineChart');
   const labels = conv.map(c=>c.spin);
-  const redData = conv.map(c=>c.red_pct);
+  const redrenderResultsTable(s.results_table);Data = conv.map(c=>c.red_pct);
   const blackData = conv.map(c=>c.black_pct);
   const theoretical = conv.map(()=>48.65);
 

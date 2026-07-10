@@ -153,9 +153,9 @@
       <div class="cell-outside" data-type="parity" data-value="impar" data-payout="1">Impar (1:1)</div>
       <div class="cell-outside" data-type="half" data-value="bajo" data-payout="1">1–18 (1:1)</div>
       <div class="cell-outside" data-type="half" data-value="alto" data-payout="1">19–36 (1:1)</div>
-      <div class="cell-outside" data-type="dozen" data-value="d1" data-payout="2">1ª doc. (2:1)</div>
-      <div class="cell-outside" data-type="dozen" data-value="d2" data-payout="2">2ª doc. (2:1)</div>
-      <div class="cell-outside" data-type="dozen" data-value="d3" data-payout="2">3ª doc. (2:1)</div>
+      <div class="cell-outside" data-type="dozen" data-value="d1" data-payout="2">1ª doc · 1-12 (2:1)</div>
+      <div class="cell-outside" data-type="dozen" data-value="d2" data-payout="2">2ª doc · 13-24 (2:1)</div>
+      <div class="cell-outside" data-type="dozen" data-value="d3" data-payout="2">3ª doc · 25-36 (2:1)</div>
     </div>
   </div>
 
@@ -331,7 +331,7 @@ async function confirmBets(){
   boardWrap.classList.add('board-locked');
   document.querySelectorAll('.stake-chip').forEach(c=>c.style.opacity='0.4');
   statusLine.classList.add('waiting');
-  statusLine.textContent = '🔒 Apuestas cerradas — esperando que el anfitrión gire la ruleta';
+  statusLine.textContent = ' Apuestas cerradas — esperando que el anfitrión gire la ruleta';
   refreshSummary();
 }
 confirmBtn.addEventListener('click', confirmBets);
@@ -397,7 +397,7 @@ async function pollState(){
     confirmed = true;
     boardWrap.classList.add('board-locked');
     statusLine.classList.add('waiting');
-    statusLine.textContent = '🔒 Apuestas cerradas — esperando el giro';
+    statusLine.textContent = ' Apuestas cerradas — esperando el giro';
   }
   refreshSummary();
 }

@@ -494,6 +494,17 @@ def api_stats():
         for s in spins[-15:]
     ][::-1]
 
+    # --- distribución de frecuencias de X = número (variable aleatoria discreta)
+    #     f(x) = frecuencia relativa;  E[X] = Σ x·f(x);  σ = √(Σ x²·f(x) − μ²)
+    freq_numbers = [0] * 37
+    for s in spins:
+        freq_numbers[s["number"]] += 1
+    exp_mean = exp_std = None
+    if total > 0:
+        exp_mean = sum(x * freq_numbers[x] for x in range(37)) / total
+        e_x2 = sum(x * x * freq_numbers[x] for x in range(37)) / total
+        exp_std = math.sqrt(max(e_x2 - exp_mean ** 2, 0))
+
     active_players = query("SELECT COUNT(*) AS c FROM players WHERE active = 1", one=True)["c"]
     history = [dict(number=s["number"], color=s["color"]) for s in spins[-20:]][::-1]
 
@@ -511,6 +522,9 @@ def api_stats():
         history=history,
         convergence=convergence,
         results_table=results_table,
+        freq_numbers=freq_numbers,
+        exp_mean=round(exp_mean, 2) if exp_mean is not None else None,
+        exp_std=round(exp_std, 2) if exp_std is not None else None,
     )
 
 
