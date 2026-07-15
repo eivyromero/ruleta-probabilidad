@@ -3,24 +3,16 @@ Ruleta de la Probabilidad — servidor multijugador
 ==================================================
 Proyecto de Estadística y Probabilidad — Casa Abierta (ULEAM)
 
+IMPORTANTE: el dinero de este juego es VIRTUAL. Nadie paga por jugar; el saldo
+inicial se otorga gratis y los premios son simbólicos. La app solo sirve para
+demostrar conceptos de probabilidad con datos generados en vivo.
+
 Arquitectura:
   - Flask sirve tres páginas: TABLERO (proyectado), JUEGO (celulares) y ADMIN.
-  - Base de datos DUAL:
-      * Local  -> SQLite  (ruleta.db)
-      * Render -> Postgres (usa la variable de entorno DATABASE_URL)
-    Esto es clave: el disco de Render (plan free) es efímero y borraría el
-    SQLite en cada reinicio. Postgres persiste de verdad.
-  - Los celulares entran por internet (Render), no por IP local.
-
-Cómo correrlo local:
-  1. pip install -r requirements.txt
-  2. python server.py
-  3. Tablero: http://localhost:5000/   ·  Admin: http://localhost:5000/admin
+  - Base de datos DUAL:  local -> SQLite ;  Render -> Postgres (DATABASE_URL)
 
 Variables de entorno (Render):
-  DATABASE_URL    -> la da Render al crear el Postgres
-  ADMIN_PASSWORD  -> contraseña del panel admin (por defecto: Mendoza)
-  PUBLIC_URL      -> ej. https://ruleta.onrender.com  (para que el QR apunte ahí)
+  DATABASE_URL, ADMIN_PASSWORD, PUBLIC_URL, PYTHON_VERSION
 """
 
 import os
@@ -37,15 +29,18 @@ from flask import (Flask, jsonify, render_template, request, g, send_file,
 APP_DIR = Path(__file__).parent
 
 # ------------------------------------------------------------- configuración
-STARTING_COINS = 10           # el ING pidió bajar el límite inicial a 10
-REVEAL_DELAY = 5.5            # seg: los celulares no ven el resultado antes que el tablero
+STARTING_BALANCE = 5.00       # saldo virtual de bienvenida (dólares de juego)
+PRIZE_THRESHOLD = 10.00       # a partir de aquí el jugador gana un premio simbólico
+REVEAL_DELAY = 5.5            # seg: el celular no ve el resultado antes que el tablero
+GLOW_TIME = 3.0               # seg: el número ganador brilla en el tablero de apuestas
+LOCK_DURATION = REVEAL_DELAY + GLOW_TIME   # apuestas cerradas mientras gira
 CHI2_CRITICAL = 5.991         # gl=2, alfa=0.05
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Mendoza")
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "").rstrip("/")
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
-if DATABASE_URL.startswith("postgres://"):          # Render entrega el esquema viejo
+if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 IS_PG = DATABASE_URL.startswith("postgresql://")
 DB_PATH = APP_DIR / "ruleta.db"
@@ -59,6 +54,11 @@ app.secret_key = os.environ.get("SECRET_KEY", "ruleta-casa-abierta-uleam")
 
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
+
+
+def money(v):
+    """Redondea a 2 decimales y evita -0.0."""
+    return round(float(v or 0) + 0.0, 2)
 
 
 # ------------------------------------------------------------------ database
@@ -84,7 +84,6 @@ def close_db(exception=None):
 
 
 def _sql(sql):
-    """SQLite usa ? como placeholder; Postgres usa %s. Escribimos siempre con ?."""
     return sql.replace("?", "%s") if IS_PG else sql
 
 
@@ -109,7 +108,6 @@ def execute(sql, params=(), commit=True):
 
 
 def insert_returning_id(sql, params):
-    """INSERT que devuelve el id nuevo, funcionando en ambos motores."""
     db = get_db()
     cur = db.cursor()
     if IS_PG:
@@ -123,65 +121,53 @@ def insert_returning_id(sql, params):
     return new_id
 
 
-SCHEMA_SQLITE = """
+MONEY_T = "DOUBLE PRECISION" if IS_PG else "REAL"
+SERIAL_T = "SERIAL PRIMARY KEY" if IS_PG else "INTEGER PRIMARY KEY AUTOINCREMENT"
+
+SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS players (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id {SERIAL_T},
     name TEXT UNIQUE NOT NULL,
-    coins INTEGER NOT NULL DEFAULT 10,
+    coins {MONEY_T} NOT NULL DEFAULT 5,
     active INTEGER NOT NULL DEFAULT 1,
-    coins_added INTEGER NOT NULL DEFAULT 0,
+    coins_added {MONEY_T} NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS spins (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id {SERIAL_T},
     number INTEGER NOT NULL,
     color TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS bets (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id {SERIAL_T},
     player_id INTEGER NOT NULL REFERENCES players(id),
     spin_id INTEGER REFERENCES spins(id),
     type TEXT NOT NULL,
     value TEXT NOT NULL,
     payout INTEGER NOT NULL,
-    stake INTEGER NOT NULL,
+    stake {MONEY_T} NOT NULL,
     resolved INTEGER NOT NULL DEFAULT 0,
     won INTEGER NOT NULL DEFAULT 0,
-    return_amount INTEGER NOT NULL DEFAULT 0,
+    return_amount {MONEY_T} NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 """
 
-SCHEMA_PG = """
-CREATE TABLE IF NOT EXISTS players (
-    id SERIAL PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL,
-    coins INTEGER NOT NULL DEFAULT 10,
-    active INTEGER NOT NULL DEFAULT 1,
-    coins_added INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS spins (
-    id SERIAL PRIMARY KEY,
-    number INTEGER NOT NULL,
-    color TEXT NOT NULL,
-    created_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS bets (
-    id SERIAL PRIMARY KEY,
-    player_id INTEGER NOT NULL REFERENCES players(id),
-    spin_id INTEGER REFERENCES spins(id),
-    type TEXT NOT NULL,
-    value TEXT NOT NULL,
-    payout INTEGER NOT NULL,
-    stake INTEGER NOT NULL,
-    resolved INTEGER NOT NULL DEFAULT 0,
-    won INTEGER NOT NULL DEFAULT 0,
-    return_amount INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL
-);
-"""
+# Migraciones: la versión anterior guardaba las columnas de dinero como INTEGER.
+# Al pasar a dólares con decimales hay que convertirlas. SQLite es de tipado
+# dinámico y no lo necesita; Postgres sí.
+PG_MIGRATIONS = [
+    "ALTER TABLE players ALTER COLUMN coins TYPE DOUBLE PRECISION USING coins::double precision",
+    "ALTER TABLE players ALTER COLUMN coins_added TYPE DOUBLE PRECISION USING coins_added::double precision",
+    "ALTER TABLE bets ALTER COLUMN stake TYPE DOUBLE PRECISION USING stake::double precision",
+    "ALTER TABLE bets ALTER COLUMN return_amount TYPE DOUBLE PRECISION USING return_amount::double precision",
+    "ALTER TABLE players ALTER COLUMN coins SET DEFAULT 5",
+]
 
 
 def init_db():
@@ -189,16 +175,38 @@ def init_db():
         import psycopg2
         db = psycopg2.connect(DATABASE_URL)
         cur = db.cursor()
-        cur.execute(SCHEMA_PG)
+        cur.execute(SCHEMA)
         db.commit()
+        for stmt in PG_MIGRATIONS:
+            try:
+                cur.execute(stmt)
+                db.commit()
+            except Exception:
+                db.rollback()      # ya estaba migrada: seguimos
         cur.close()
         db.close()
     else:
         import sqlite3
         db = sqlite3.connect(DB_PATH)
-        db.executescript(SCHEMA_SQLITE)
+        db.executescript(SCHEMA)
         db.commit()
         db.close()
+
+
+def get_setting(key, default=""):
+    row = query("SELECT value FROM settings WHERE key = ?", (key,), one=True)
+    return row["value"] if row else default
+
+
+def set_setting(key, value):
+    if query("SELECT 1 FROM settings WHERE key = ?", (key,), one=True):
+        execute("UPDATE settings SET value = ? WHERE key = ?", (str(value), key))
+    else:
+        execute("INSERT INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+
+
+def is_unlimited():
+    return get_setting("unlimited", "0") == "1"
 
 
 def color_of(num: int) -> str:
@@ -220,10 +228,26 @@ def local_ip() -> str:
 
 
 def join_url() -> str:
-    """URL que va en el QR: la pública de Render si existe, si no la IP local."""
     if PUBLIC_URL:
         return f"{PUBLIC_URL}/jugar"
     return f"http://{local_ip()}:5000/jugar"
+
+
+def betting_state():
+    """Devuelve (abierto?, segundos_restantes). Mientras la ruleta gira y hasta
+    que se revela el número ganador, nadie puede apostar."""
+    last = query("SELECT created_at FROM spins ORDER BY id DESC LIMIT 1", one=True)
+    if not last:
+        return True, 0.0
+    try:
+        t = datetime.fromisoformat(str(last["created_at"]))
+    except ValueError:
+        return True, 0.0
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=timezone.utc)
+    elapsed = (datetime.now(timezone.utc) - t).total_seconds()
+    remaining = LOCK_DURATION - elapsed
+    return (remaining <= 0), max(remaining, 0.0)
 
 
 # --------------------------------------------------------------------- pages
@@ -295,14 +319,14 @@ def api_join():
     if row is None:
         insert_returning_id(
             "INSERT INTO players (name, coins, active, created_at) VALUES (?, ?, 1, ?)",
-            (name, STARTING_COINS, now_iso()),
+            (name, STARTING_BALANCE, now_iso()),
         )
         row = query("SELECT * FROM players WHERE name = ?", (name,), one=True)
     elif not row["active"]:
-        # jugador de una ronda anterior que vuelve: se reactiva con saldo fresco
-        execute("UPDATE players SET active = 1, coins = ? WHERE id = ?", (STARTING_COINS, row["id"]))
+        execute("UPDATE players SET active = 1, coins = ? WHERE id = ?", (STARTING_BALANCE, row["id"]))
         row = query("SELECT * FROM players WHERE name = ?", (name,), one=True)
-    return jsonify(id=row["id"], name=row["name"], coins=row["coins"])
+    return jsonify(id=row["id"], name=row["name"], balance=money(row["coins"]),
+                   unlimited=is_unlimited())
 
 
 @app.route("/api/bets", methods=["POST"])
@@ -311,6 +335,10 @@ def api_place_bets():
     data = request.json or {}
     name = data.get("name", "").strip()
     bets = data.get("bets") or []
+
+    open_now, remaining = betting_state()
+    if not open_now:
+        return jsonify(error=f"La ruleta está girando — espera el resultado ({remaining:.0f}s)"), 409
 
     player = query("SELECT * FROM players WHERE name = ?", (name,), one=True)
     if player is None:
@@ -323,22 +351,31 @@ def api_place_bets():
     if already:
         return jsonify(error="Ya confirmaste tus apuestas para esta ronda"), 400
 
-    clean, total = [], 0
+    clean, total = [], 0.0
     for b in bets:
         try:
-            stake = int(b.get("stake", 0))
+            stake = money(b.get("stake", 0))
             payout = int(b.get("payout", 1))
         except (TypeError, ValueError):
             continue
-        if stake < 1 or b.get("type") not in ("number", "color", "parity", "half", "dozen"):
+        if stake < 0.01 or b.get("type") not in ("number", "color", "parity", "half", "dozen"):
             continue
         clean.append((b["type"], str(b.get("value")), payout, stake))
         total += stake
+    total = money(total)
 
     if not clean:
         return jsonify(error="No hay apuestas válidas"), 400
-    if total > player["coins"]:
-        return jsonify(error="Monedas insuficientes"), 400
+
+    unlimited = is_unlimited()
+    balance = money(player["coins"])
+    if total > balance:
+        if not unlimited:
+            return jsonify(error="Saldo insuficiente"), 400
+        # Modo ilimitado: la casa cubre la diferencia para que nadie se quede fuera.
+        gap = money(total - balance)
+        execute("UPDATE players SET coins = coins + ?, coins_added = coins_added + ? WHERE id = ?",
+                (gap, gap, player["id"]))
 
     now = now_iso()
     for btype, value, payout, stake in clean:
@@ -349,8 +386,8 @@ def api_place_bets():
             commit=False,
         )
     execute("UPDATE players SET coins = coins - ? WHERE id = ?", (total, player["id"]))
-    new_coins = query("SELECT coins FROM players WHERE id = ?", (player["id"],), one=True)["coins"]
-    return jsonify(coins=new_coins, placed=len(clean), total=total)
+    new_balance = query("SELECT coins FROM players WHERE id = ?", (player["id"],), one=True)["coins"]
+    return jsonify(balance=money(new_balance), placed=len(clean), total=total)
 
 
 def _bet_matches(bet_type, value, number):
@@ -373,6 +410,10 @@ def _bet_matches(bet_type, value, number):
 
 @app.route("/api/spin", methods=["POST"])
 def api_spin():
+    open_now, remaining = betting_state()
+    if not open_now:
+        return jsonify(error=f"La ruleta ya está girando ({remaining:.0f}s)"), 409
+
     number = random.choice(ORDER)
     color = color_of(number)
     spin_id = insert_returning_id(
@@ -383,7 +424,7 @@ def api_spin():
     pending = query("SELECT * FROM bets WHERE resolved = 0")
     for bet in pending:
         won = _bet_matches(bet["type"], bet["value"], number)
-        ret = bet["stake"] * (bet["payout"] + 1) if won else 0
+        ret = money(bet["stake"] * (bet["payout"] + 1)) if won else 0.0
         execute(
             "UPDATE bets SET resolved = 1, won = ?, return_amount = ?, spin_id = ? WHERE id = ?",
             (1 if won else 0, ret, spin_id, bet["id"]),
@@ -394,7 +435,12 @@ def api_spin():
                     (ret, bet["player_id"]), commit=False)
     get_db().commit()
 
-    return jsonify(number=number, color=color, spin_id=spin_id, resolved_bets=len(pending))
+    return jsonify(number=number, color=color, spin_id=spin_id,
+                   resolved_bets=len(pending), lock_seconds=LOCK_DURATION)
+
+
+def _reveal_cutoff():
+    return (datetime.now(timezone.utc) - timedelta(seconds=REVEAL_DELAY)).isoformat()
 
 
 @app.route("/api/state")
@@ -407,7 +453,8 @@ def api_state():
     if player is None:
         return jsonify(error="Jugador no encontrado"), 404
 
-    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=REVEAL_DELAY)).isoformat()
+    cutoff = _reveal_cutoff()
+    open_now, remaining = betting_state()
 
     pending = query(
         """SELECT b.id, b.type, b.value, b.stake FROM bets b
@@ -431,21 +478,66 @@ def api_state():
 
     latest = query("SELECT * FROM spins WHERE created_at <= ? ORDER BY id DESC LIMIT 1",
                    (cutoff,), one=True)
-
-    # historial visible para el jugador (lo pidió el ING: ver qué fichas han salido)
     hist_rows = query(
         "SELECT number, color FROM spins WHERE created_at <= ? ORDER BY id DESC LIMIT 15", (cutoff,)
     )
-    history = [dict(number=r["number"], color=r["color"]) for r in hist_rows]
+    balance = money(player["coins"] - float(hidden_gain or 0))
 
     return jsonify(
-        coins=player["coins"] - int(hidden_gain),
+        balance=balance,
         pending=[dict(r) for r in pending],
         resolved=[dict(r) for r in resolved],
-        history=history,
+        history=[dict(number=r["number"], color=r["color"]) for r in hist_rows],
         latest_spin_id=latest["id"] if latest else 0,
         latest_spin=(dict(number=latest["number"], color=latest["color"]) if latest else None),
+        betting_open=open_now,
+        lock_remaining=round(remaining, 1),
+        unlimited=is_unlimited(),
+        prize=balance >= PRIZE_THRESHOLD,
+        prize_threshold=PRIZE_THRESHOLD,
+        winners=_winners_payload(cutoff),
     )
+
+
+def _winners_payload(cutoff=None):
+    """Ganadores del último giro ya revelado: nombre y cuánto ganó.
+    Es lo que se muestra a los costados para motivar a la gente."""
+    if cutoff is None:
+        cutoff = _reveal_cutoff()
+    last = query("SELECT id, number, color FROM spins WHERE created_at <= ? ORDER BY id DESC LIMIT 1",
+                 (cutoff,), one=True)
+    if not last:
+        return dict(spin_id=0, count=0, total=0.0, list=[], number=None)
+    rows = query(
+        """SELECT p.name,
+                  COALESCE(SUM(b.return_amount), 0) AS won_amount,
+                  MAX(CASE WHEN b.type = 'number' AND b.value = '0' THEN 1 ELSE 0 END) AS jackpot,
+                  MAX(p.coins) AS balance
+           FROM bets b JOIN players p ON p.id = b.player_id
+           WHERE b.spin_id = ? AND b.won = 1
+           GROUP BY p.name
+           ORDER BY won_amount DESC
+           LIMIT 12""",
+        (last["id"],),
+    )
+    lst = [dict(name=r["name"], amount=money(r["won_amount"]),
+                jackpot=bool(r["jackpot"]), prize=money(r["balance"]) >= PRIZE_THRESHOLD)
+           for r in rows]
+    return dict(spin_id=last["id"], number=last["number"], color=last["color"],
+                count=len(lst), total=money(sum(x["amount"] for x in lst)), list=lst)
+
+
+@app.route("/api/winners")
+def api_winners():
+    return jsonify(_winners_payload())
+
+
+@app.route("/api/settings")
+def api_settings():
+    open_now, remaining = betting_state()
+    return jsonify(unlimited=is_unlimited(), betting_open=open_now,
+                   lock_remaining=round(remaining, 1),
+                   starting_balance=STARTING_BALANCE, prize_threshold=PRIZE_THRESHOLD)
 
 
 @app.route("/api/stats")
@@ -476,7 +568,6 @@ def api_stats():
         chi2 = sum((observed[k] - expected[k]) ** 2 / expected[k] for k in expected)
         verdict = "normal" if chi2 < CHI2_CRITICAL else "sesgo"
 
-    # --- serie de convergencia (ley de los grandes números): gráfico de línea
     convergence = []
     r = b = 0
     for i, s in enumerate(spins, start=1):
@@ -484,18 +575,8 @@ def api_stats():
             r += 1
         elif s["color"] == "negro":
             b += 1
-        convergence.append(
-            dict(spin=i, red_pct=round(r / i * 100, 2), black_pct=round(b / i * 100, 2))
-        )
+        convergence.append(dict(spin=i, red_pct=round(r / i * 100, 2), black_pct=round(b / i * 100, 2)))
 
-    # --- tabla de resultados: últimos giros con hora
-    results_table = [
-        dict(spin=s["id"], number=s["number"], color=s["color"], time=str(s["created_at"])[11:19])
-        for s in spins[-15:]
-    ][::-1]
-
-    # --- distribución de frecuencias de X = número (variable aleatoria discreta)
-    #     f(x) = frecuencia relativa;  E[X] = Σ x·f(x);  σ = √(Σ x²·f(x) − μ²)
     freq_numbers = [0] * 37
     for s in spins:
         freq_numbers[s["number"]] += 1
@@ -506,22 +587,17 @@ def api_stats():
         exp_std = math.sqrt(max(e_x2 - exp_mean ** 2, 0))
 
     active_players = query("SELECT COUNT(*) AS c FROM players WHERE active = 1", one=True)["c"]
-    history = [dict(number=s["number"], color=s["color"]) for s in spins[-20:]][::-1]
 
     return jsonify(
-        total=total,
-        red=red, black=black, green=green,
+        total=total, red=red, black=black, green=green,
         red_pct=round(red / total * 100, 1) if total else 0,
         black_pct=round(black / total * 100, 1) if total else 0,
         green_pct=round(green / total * 100, 1) if total else 0,
         dozens=dozens,
         chi2=round(chi2, 3) if chi2 is not None else None,
-        chi2_critical=CHI2_CRITICAL,
-        verdict=verdict,
+        chi2_critical=CHI2_CRITICAL, verdict=verdict,
         active_players=active_players,
-        history=history,
         convergence=convergence,
-        results_table=results_table,
         freq_numbers=freq_numbers,
         exp_mean=round(exp_mean, 2) if exp_mean is not None else None,
         exp_std=round(exp_std, 2) if exp_std is not None else None,
@@ -545,15 +621,15 @@ def api_players():
     )
     players = []
     for r in rows:
-        staked, returned = int(r["staked"]), int(r["returned"])
+        staked, returned = money(r["staked"]), money(r["returned"])
         players.append(dict(
-            id=r["id"], name=r["name"], coins=r["coins"],
-            staked=staked, returned=returned,
-            net=returned - staked,                     # ganancia/pérdida neta
+            id=r["id"], name=r["name"], balance=money(r["coins"]),
+            staked=staked, returned=returned, net=money(returned - staked),
             bets_count=int(r["bets_count"]), bets_won=int(r["bets_won"]),
-            coins_added=int(r["coins_added"]),
+            funds_added=money(r["coins_added"]),
+            prize=money(r["coins"]) >= PRIZE_THRESHOLD,
         ))
-    return jsonify(players=players)
+    return jsonify(players=players, prize_threshold=PRIZE_THRESHOLD)
 
 
 @app.route("/api/registry")
@@ -569,9 +645,9 @@ def api_registry():
            ORDER BY p.created_at DESC"""
     )
     return jsonify(registry=[
-        dict(name=r["name"], coins=r["coins"], active=bool(r["active"]),
+        dict(name=r["name"], balance=money(r["coins"]), active=bool(r["active"]),
              joined=str(r["created_at"])[:19].replace("T", " "),
-             coins_added=int(r["coins_added"]),
+             funds_added=money(r["coins_added"]),
              bets_count=int(r["bets_count"]), bets_won=int(r["bets_won"]))
         for r in rows
     ], total=len(rows))
@@ -580,57 +656,66 @@ def api_registry():
 @app.route("/api/leaderboard")
 def api_leaderboard():
     rows = query("SELECT name, coins FROM players WHERE active = 1 ORDER BY coins DESC, name ASC LIMIT 10")
-    return jsonify(leaders=[dict(name=r["name"], coins=r["coins"]) for r in rows])
+    return jsonify(leaders=[dict(name=r["name"], balance=money(r["coins"]),
+                                 prize=money(r["coins"]) >= PRIZE_THRESHOLD) for r in rows],
+                   prize_threshold=PRIZE_THRESHOLD)
 
 
 # ------------------------------------------------------------- admin actions
-@app.route("/api/admin/add_coins", methods=["POST"])
+@app.route("/api/admin/add_funds", methods=["POST"])
 @admin_required
-def api_add_coins():
-    """Recarga GRATUITA de monedas. El admin decide la cantidad, sin tope.
-    Se permiten cantidades negativas para corregir un error de tipeo,
-    pero el saldo nunca baja de 0."""
+def api_add_funds():
+    """Recarga GRATUITA de saldo. El admin decide el monto, sin tope.
+    Acepta negativos para corregir; el saldo nunca baja de 0."""
     data = request.json or {}
     name = (data.get("name") or "").strip()
     try:
-        amount = int(data.get("amount", 0))
+        amount = money(data.get("amount", 0))
     except (TypeError, ValueError):
-        return jsonify(error="Cantidad inválida"), 400
+        return jsonify(error="Monto inválido"), 400
     if amount == 0:
-        return jsonify(error="La cantidad no puede ser 0"), 400
+        return jsonify(error="El monto no puede ser 0"), 400
 
     player = query("SELECT * FROM players WHERE name = ?", (name,), one=True)
     if player is None:
         return jsonify(error="Jugador no encontrado"), 404
 
-    # si es un descuento, no dejamos el saldo por debajo de 0
     delta = amount
     if delta < 0:
-        delta = max(delta, -player["coins"])
+        delta = money(max(delta, -money(player["coins"])))
 
-    execute(
-        "UPDATE players SET coins = coins + ?, coins_added = coins_added + ? WHERE id = ?",
-        (delta, delta, player["id"]),
-    )
-    new_coins = query("SELECT coins FROM players WHERE id = ?", (player["id"],), one=True)["coins"]
-    return jsonify(ok=True, name=name, coins=new_coins, added=delta)
+    execute("UPDATE players SET coins = coins + ?, coins_added = coins_added + ? WHERE id = ?",
+            (delta, delta, player["id"]))
+    new_balance = query("SELECT coins FROM players WHERE id = ?", (player["id"],), one=True)["coins"]
+    return jsonify(ok=True, name=name, balance=money(new_balance), added=delta)
+
+
+@app.route("/api/admin/unlimited", methods=["POST"])
+@admin_required
+def api_toggle_unlimited():
+    """Modo juego ilimitado: los jugadores pueden apostar el monto que quieran;
+    si supera su saldo, la casa cubre la diferencia automáticamente."""
+    data = request.json or {}
+    enabled = bool(data.get("enabled"))
+    set_setting("unlimited", "1" if enabled else "0")
+    return jsonify(ok=True, unlimited=enabled)
 
 
 @app.route("/api/admin/reset", methods=["POST"])
 @admin_required
 def api_reset():
-    """Nueva ronda: limpia giros y apuestas (tabla + gráficos vuelven a cero)
-    y desactiva a los jugadores actuales. NO borra el registro histórico."""
+    """Nueva ronda: limpia giros y apuestas y desactiva a los jugadores actuales.
+    NO borra el registro histórico."""
     execute("DELETE FROM bets", commit=False)
     execute("DELETE FROM spins", commit=False)
-    execute("UPDATE players SET active = 0, coins = ?", (STARTING_COINS,))
+    execute("UPDATE players SET active = 0, coins = ?", (STARTING_BALANCE,))
     return jsonify(ok=True)
 
 
 @app.route("/api/admin/wipe", methods=["POST"])
 @admin_required
 def api_wipe():
-    """Borrado TOTAL, incluido el registro histórico. Usar con cuidado."""
+    """Borrado TOTAL, incluido el registro histórico."""
     execute("DELETE FROM bets", commit=False)
     execute("DELETE FROM spins", commit=False)
     execute("DELETE FROM players")

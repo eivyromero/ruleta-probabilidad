@@ -3,34 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ruleta de la Probabilidad — Tablero Principal</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;900&family=Inter:wght@400;500;600;700;800&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
+<title>Ruleta de la Probabilidad — Tablero</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;600;700;800&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --felt-dark:#0a2f24; --felt:#0f4536; --felt-light:#146349;
-    --gold:#cba135; --gold-bright:#e8c766; --cream:#f2e9d8;
-    --red:#a8283b; --red-bright:#c8324a; --black-p:#141414;
-    --panel:#0d2a21; --line:rgba(203,161,53,0.25);
+    --felt-dark:#0a2f24; --gold:#cba135; --gold-bright:#e8c766; --cream:#f2e9d8;
+    --red:#a8283b; --red-bright:#c8324a; --line:rgba(203,161,53,0.25); --win:#5be08a;
   }
   *{box-sizing:border-box;}
-  body{
-    margin:0; background:radial-gradient(ellipse at 50% -10%, #163f31 0%, var(--felt-dark) 55%, #071f18 100%);
-    font-family:'Inter',sans-serif; color:var(--cream); min-height:100vh; padding:24px;
-  }
+  body{margin:0;padding:24px 18px 60px;color:var(--cream);font-family:'Inter',sans-serif;
+    background:radial-gradient(ellipse at 50% -10%, #163f31 0%, var(--felt-dark) 55%, #071f18 100%);min-height:100vh;}
+  .top-title{text-align:center;font-family:'Roboto Mono',monospace;font-size:12px;letter-spacing:0.35em;
+    color:var(--gold);text-transform:uppercase;margin-bottom:6px;}
+  h1{font-family:'Playfair Display',serif;font-weight:900;font-size:44px;text-align:center;margin:0 0 26px;
+    background:linear-gradient(180deg,var(--gold-bright),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;}
   .layout{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1.1fr 0.9fr;gap:22px;}
   @media(max-width:920px){ .layout{grid-template-columns:1fr;} }
 
-  header{grid-column:1/-1;text-align:center;margin-bottom:6px;}
-  .eyebrow{font-family:'Roboto Mono',monospace;font-size:12px;letter-spacing:0.35em;text-transform:uppercase;color:var(--gold);opacity:0.85;}
-  h1{font-family:'Playfair Display',serif;font-weight:900;font-size:clamp(30px,4vw,48px);margin:6px 0;
-     background:linear-gradient(180deg,var(--gold-bright),var(--gold) 70%);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .panel{background:rgba(0,0,0,0.22);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:18px;}
+  .panel h2{font-family:'Playfair Display',serif;font-size:19px;margin:0 0 12px;color:var(--gold-bright);}
 
-  .stage{
-    background:radial-gradient(circle at 50% 35%, var(--felt-light) 0%, var(--felt) 55%, var(--felt-dark) 100%);
-    border-radius:28px; padding:30px 20px; border:1px solid var(--line);
-    box-shadow:0 30px 60px -20px rgba(0,0,0,0.6), inset 0 0 80px rgba(0,0,0,0.35);
-  }
-  .wheel-zone{position:relative;width:min(380px,80vw);height:min(380px,80vw);margin:0 auto 18px;}
+  /* ---------------- rueda ---------------- */
+  .wheel-card{background:rgba(0,0,0,0.18);border:1px solid var(--line);border-radius:18px;padding:22px;text-align:center;}
+  .wheel-wrap{position:relative;width:min(380px,80vw);height:min(380px,80vw);margin:0 auto 18px;}
   .ball-track{position:absolute;inset:0;border-radius:50%;}
   .ball{position:absolute;width:12px;height:12px;border-radius:50%;
     background:radial-gradient(circle at 35% 30%, #fff, #d8d8d8 55%, #999 100%);
@@ -46,12 +41,10 @@
   .wheel{position:absolute;inset:26px;border-radius:50%;overflow:hidden;
     transition:transform 4.6s cubic-bezier(.15,.85,.15,1);box-shadow:inset 0 0 18px rgba(0,0,0,0.7);}
   .wheel-face,.wheel-separators,.wheel-labels{position:absolute;inset:0;border-radius:50%;}
-  /* Franja exterior de números (estilo ruleta de casino) */
   .wheel-band{position:absolute;inset:0;border-radius:50%;pointer-events:none;
-    background:radial-gradient(circle at 50% 50%,
-      transparent 0%, transparent 61.5%,
-      rgba(203,161,53,0.85) 61.5%, rgba(203,161,53,0.85) 62.3%,   /* aro dorado interior de la franja */
-      rgba(0,0,0,0.30) 62.3%, rgba(0,0,0,0.18) 100%);}             /* banda oscurecida donde van los números */
+    background:radial-gradient(circle at 50% 50%, transparent 0%, transparent 61.5%,
+      rgba(203,161,53,0.85) 61.5%, rgba(203,161,53,0.85) 62.3%,
+      rgba(0,0,0,0.30) 62.3%, rgba(0,0,0,0.18) 100%);}
   .pocket{position:absolute;inset:0;pointer-events:none;}
   .pocket span{position:absolute;left:50%;top:4.2%;transform:translateX(-50%);
     font-family:'Roboto Mono',monospace;font-weight:700;font-size:13px;color:#f5efdd;
@@ -64,28 +57,59 @@
     border-left:8px solid transparent;border-right:8px solid transparent;border-top:14px solid var(--gold-bright);
     z-index:6;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.5));}
 
-  .result-row{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:16px;flex-wrap:wrap;}
-  .result-chip{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-    font-family:'Playfair Display',serif;font-weight:900;font-size:24px;border:2px solid var(--gold);
-    box-shadow:0 6px 14px rgba(0,0,0,0.4);}
-  .chip-red{background:linear-gradient(160deg,var(--red-bright),var(--red));}
-  .chip-black{background:linear-gradient(160deg,#2b2b2b,var(--black-p));}
-  .chip-green{background:linear-gradient(160deg,#1c7a4c,#0e4a2e);}
-  .result-meta{font-family:'Roboto Mono',monospace;font-size:13px;color:#c9c0a8;line-height:1.6;}
-  .result-meta b{color:var(--cream);}
+  .result-row{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;}
+  .result-chip{width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-family:'Playfair Display',serif;font-weight:900;font-size:24px;color:#fff;border:2px solid var(--gold);}
+  .chip-rojo{background:linear-gradient(160deg,var(--red-bright),var(--red));}
+  .chip-negro{background:linear-gradient(160deg,#2b2b2b,#141414);}
+  .chip-verde,.chip-green{background:linear-gradient(160deg,#1c7a4c,#0e4a2e);}
+  .result-meta{font-family:'Roboto Mono',monospace;font-size:13px;color:#c9c0a8;line-height:1.8;text-align:left;}
+  .result-meta b{color:var(--gold-bright);}
 
-  .spin-btn{display:block;margin:0 auto;padding:16px 46px;border:none;border-radius:999px;
+  .spin-btn{border:none;border-radius:999px;padding:15px 40px;cursor:pointer;
     background:linear-gradient(180deg,var(--gold-bright),var(--gold));color:#1a1305;
-    font-family:'Inter',sans-serif;font-weight:800;font-size:16px;letter-spacing:0.03em;cursor:pointer;
-    box-shadow:0 10px 22px -6px rgba(203,161,53,0.55);}
-  .spin-btn:disabled{opacity:0.5;cursor:not-allowed;}
-  .subhint{text-align:center;font-family:'Roboto Mono',monospace;font-size:12px;color:#a89f86;margin-top:8px;}
+    font-family:'Inter',sans-serif;font-weight:800;font-size:17px;box-shadow:0 10px 26px -8px rgba(203,161,53,0.6);}
+  .spin-btn:disabled{opacity:0.45;cursor:not-allowed;box-shadow:none;}
+  .subhint{font-family:'Roboto Mono',monospace;font-size:11px;color:#8a8271;margin-top:10px;}
+  .sound-bar{display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap;}
+  .sound-btn{border:1px solid var(--line);background:rgba(255,255,255,0.04);color:var(--cream);
+    font-family:'Roboto Mono',monospace;font-size:11px;padding:7px 14px;border-radius:999px;cursor:pointer;}
+  .sound-btn.on{border-color:var(--gold-bright);color:var(--gold-bright);background:rgba(232,199,102,0.12);}
 
-  .side{display:flex;flex-direction:column;gap:16px;}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:20px;}
-  .panel h2{font-family:'Playfair Display',serif;font-size:18px;margin:0 0 10px;color:var(--gold-bright);}
+  .history-strip{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:16px;}
+  .h-chip{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-family:'Roboto Mono',monospace;font-weight:700;font-size:11px;color:#fff;}
+  .h-chip.rojo{background:linear-gradient(160deg,var(--red-bright),var(--red));}
+  .h-chip.negro{background:linear-gradient(160deg,#2b2b2b,#141414);}
+  .h-chip.verde{background:linear-gradient(160deg,#1c7a4c,#0e4a2e);}
 
-  /* Tarjetas de esperanza / desviación */
+  /* ---------------- ganadores ---------------- */
+  .winners-head{display:flex;justify-content:space-between;align-items:baseline;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+  .winners-sum{font-family:'Roboto Mono',monospace;font-size:13px;color:var(--win);font-weight:700;}
+  .winner-row{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    font-family:'Roboto Mono',monospace;font-size:13px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.05);
+    animation:slideIn .35s ease-out;}
+  @keyframes slideIn{from{opacity:0;transform:translateX(-10px);}to{opacity:1;transform:none;}}
+  .winner-row:last-child{border-bottom:none;}
+  .winner-row .amt{color:var(--win);font-weight:700;}
+  .winner-row .jp{font-size:9.5px;background:rgba(232,199,102,0.2);color:var(--gold-bright);padding:2px 7px;border-radius:999px;}
+  .winner-row .pz{font-size:9.5px;background:rgba(91,224,138,0.18);color:var(--win);padding:2px 7px;border-radius:999px;}
+  .winners-empty{font-family:'Roboto Mono',monospace;font-size:12px;color:#7d7458;text-align:center;padding:10px 0;}
+
+  /* ---------------- estadística ---------------- */
+  .stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  .stat-card{background:rgba(0,0,0,0.2);border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center;}
+  .stat-card .lbl{font-family:'Roboto Mono',monospace;font-size:10px;color:#a89f86;text-transform:uppercase;letter-spacing:0.1em;}
+  .stat-card .val{font-family:'Playfair Display',serif;font-weight:900;font-size:26px;color:var(--gold-bright);margin:4px 0 2px;}
+  .stat-card .theo{font-family:'Roboto Mono',monospace;font-size:10px;color:#8a8271;}
+  .chi-box{background:rgba(0,0,0,0.2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:12px;
+    font-family:'Roboto Mono',monospace;font-size:12.5px;}
+  .chi-box .row{display:flex;justify-content:space-between;padding:3px 0;}
+  .chi-box .row b{color:var(--gold-bright);}
+  .verdict{margin-top:10px;padding:9px;border-radius:8px;text-align:center;font-size:11.5px;line-height:1.5;}
+  .verdict-ok{background:rgba(91,224,138,0.14);color:var(--win);border:1px solid rgba(91,224,138,0.4);}
+  .verdict-warn{background:rgba(232,199,102,0.14);color:var(--gold-bright);border:1px solid rgba(232,199,102,0.4);}
+
   .moments{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px;}
   .moment-card{background:rgba(0,0,0,0.2);border:1px solid var(--line);border-radius:10px;padding:12px;}
   .m-lbl{font-family:'Roboto Mono',monospace;font-size:10px;color:#a89f86;margin-bottom:6px;line-height:1.3;}
@@ -93,11 +117,8 @@
   .m-theo{font-family:'Roboto Mono',monospace;font-size:11px;font-weight:500;color:#8a8271;}
   @media(max-width:520px){ .moments{grid-template-columns:1fr;} }
 
-  /* Gráficos */
   .chart-box{position:relative;height:230px;}
   .chart-note{font-family:'Roboto Mono',monospace;font-size:10.5px;color:#8a8271;line-height:1.6;margin:10px 0 0;}
-
-  /* Dona por color */
   .donut-wrap{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
   .donut-wrap .chart-box{flex:1 1 180px;min-width:160px;}
   .donut-legend{display:flex;flex-direction:column;gap:8px;font-family:'Roboto Mono',monospace;font-size:12px;}
@@ -105,7 +126,6 @@
   .donut-legend .dot{width:12px;height:12px;border-radius:3px;flex:0 0 auto;}
   .donut-legend .li b{color:var(--gold-bright);}
 
-  /* Tabla f(x) */
   .fx-table{width:100%;border-collapse:collapse;font-family:'Roboto Mono',monospace;font-size:12px;}
   .fx-table th{text-align:right;color:#a89f86;font-weight:500;padding:7px 6px;border-bottom:1px solid var(--line);
     font-size:10px;text-transform:uppercase;}
@@ -120,56 +140,54 @@
   .qr-box img{width:120px;height:120px;border-radius:10px;background:#fff;padding:6px;}
   .qr-info{font-family:'Roboto Mono',monospace;font-size:12.5px;color:#c9c0a8;line-height:1.6;}
   .qr-info b{color:var(--gold-bright);}
-
-  .stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-  .stat-card{background:rgba(255,255,255,0.03);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center;}
-  .stat-card .lbl{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#a89f86;font-family:'Roboto Mono',monospace;}
-  .stat-card .val{font-family:'Roboto Mono',monospace;font-weight:700;font-size:19px;margin-top:3px;}
-  .stat-card .theo{font-size:9.5px;color:#7d7458;margin-top:2px;}
-
-  .chi-box{margin-top:14px;padding:14px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,0.03);}
-  .chi-box .row{display:flex;justify-content:space-between;font-family:'Roboto Mono',monospace;font-size:12.5px;margin-bottom:5px;}
-  .chi-box .verdict{margin-top:8px;font-weight:700;text-align:center;padding:8px;border-radius:8px;font-family:'Roboto Mono',monospace;font-size:12.5px;}
-  .verdict-ok{background:rgba(63,191,130,0.15);color:#5be08a;}
-  .verdict-warn{background:rgba(200,50,74,0.18);color:#e88a97;}
-  .verdict-wait{background:rgba(255,255,255,0.05);color:#a89f86;}
-
-  .history-strip{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px;}
-  .hchip{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-    font-family:'Roboto Mono',monospace;font-size:9.5px;font-weight:700;border:1px solid rgba(255,255,255,0.15);}
-
-  .players-badge{font-family:'Roboto Mono',monospace;font-size:12px;text-align:center;color:#a89f86;}
-  .players-badge b{color:var(--gold-bright);font-size:16px;}
+  .unlimited-banner{display:none;margin-top:12px;padding:9px;border-radius:8px;text-align:center;
+    font-family:'Roboto Mono',monospace;font-size:11.5px;font-weight:700;
+    background:linear-gradient(180deg,rgba(91,224,138,0.2),rgba(28,122,76,0.12));
+    border:1px solid rgba(91,224,138,0.5);color:var(--win);}
+  .unlimited-banner.show{display:block;}
 </style>
 </head>
 <body>
+
+<div class="top-title">Casa Abierta · Estadística y Probabilidad</div>
+<h1>La Ruleta de la Probabilidad</h1>
+
 <div class="layout">
-  <header>
-    <div class="eyebrow">Casa Abierta · Estadística y Probabilidad</div>
-    <h1>La Ruleta de la Probabilidad</h1>
-  </header>
-
-  <div class="stage">
-    <div class="wheel-zone">
-      <div class="wheel-outer"></div>
-      <div class="wheel-rim"></div>
-      <div class="ball-track"><div class="ball" id="ball"></div></div>
-      <div class="wheel" id="wheel"></div>
-      <div class="hub"></div>
-      <div class="pointer"></div>
-    </div>
-    <div class="result-row">
-      <div class="result-chip chip-green" id="resultChip">?</div>
-      <div class="result-meta">
-        Último resultado: <b id="resultText">—</b><br>
-        Total de tiradas: <b id="spinCount">0</b> · Apuestas resueltas: <b id="betsResolved">0</b>
+  <div class="wheel-col">
+    <div class="wheel-card">
+      <div class="wheel-wrap">
+        <div class="wheel-outer"></div>
+        <div class="wheel-rim"></div>
+        <div class="ball-track"><div class="ball" id="ball"></div></div>
+        <div class="wheel" id="wheel"></div>
+        <div class="hub"></div>
+        <div class="pointer"></div>
       </div>
+      <div class="result-row">
+        <div class="result-chip chip-verde" id="resultChip">?</div>
+        <div class="result-meta">
+          Último resultado: <b id="resultText">—</b><br>
+          Total de tiradas: <b id="spinCount">0</b> · Apuestas resueltas: <b id="betsResolved">0</b>
+        </div>
+      </div>
+      <button class="spin-btn" id="spinBtn">🎯 Girar la ruleta</button>
+      <div class="subhint" id="subhint">Solo el anfitrión gira — los jugadores apuestan desde su celular</div>
+      <div class="sound-bar">
+        <button class="sound-btn" id="musicBtn">🎵 Música de fondo: OFF</button>
+        <button class="sound-btn on" id="sfxBtn">🔊 Sonido de la ruleta: ON</button>
+      </div>
+      <div class="history-strip" id="historyStrip"></div>
     </div>
-    <button class="spin-btn" id="spinBtn">🎯 Girar la ruleta</button>
-    <div class="subhint">Solo el anfitrión gira — los jugadores apuestan desde su celular</div>
-    <div class="history-strip" id="historyStrip"></div>
 
-    <div class="panel" style="margin-top:20px;">
+    <div class="panel" style="margin-top:18px;">
+      <div class="winners-head">
+        <h2 style="margin:0;">🏆 Ganadores del último giro</h2>
+        <span class="winners-sum" id="winnersSum"></span>
+      </div>
+      <div id="winnersList"><div class="winners-empty">Aún no hay ganadores</div></div>
+    </div>
+
+    <div class="panel">
       <h2>🍩 Reparto por color</h2>
       <div class="donut-wrap">
         <div class="chart-box" style="height:200px;"><canvas id="donutChart"></canvas></div>
@@ -203,7 +221,11 @@
         <img src="/qr.png" alt="QR para jugar">
         <div class="qr-info">Escanea con tu celular<br>o entra a<br><b>{{ join_url }}</b></div>
       </div>
-      <div class="players-badge" style="margin-top:12px;">Jugadores registrados: <b id="playerCount">0</b></div>
+      <div style="font-family:'Roboto Mono',monospace;font-size:12.5px;color:#c9c0a8;margin-top:12px;text-align:center;">
+        Jugadores registrados: <b id="playerCount" style="color:var(--gold-bright);">0</b>
+        · Saldo de bienvenida: <b style="color:var(--gold-bright);">$5.00</b>
+      </div>
+      <div class="unlimited-banner" id="unlimitedBanner">♾️ JUEGO ILIMITADO ACTIVO — apuesta lo que quieras</div>
     </div>
 
     <div class="panel">
@@ -214,15 +236,14 @@
     <div class="panel">
       <h2>Probabilidad: teórica vs. experimental</h2>
       <div class="stat-grid">
-        <div class="stat-card"><div class="lbl">Rojo</div><div class="val" id="pRed">0%</div><div class="theo">teórico 48.6%</div></div>
-        <div class="stat-card"><div class="lbl">Negro</div><div class="val" id="pBlack">0%</div><div class="theo">teórico 48.6%</div></div>
-        <div class="stat-card"><div class="lbl">Verde</div><div class="val" id="pGreen">0%</div><div class="theo">teórico 2.7%</div></div>
+        <div class="stat-card"><div class="lbl">Rojo</div><div class="val" id="redPct">0%</div><div class="theo">teórico 48.6%</div></div>
+        <div class="stat-card"><div class="lbl">Negro</div><div class="val" id="blackPct">0%</div><div class="theo">teórico 48.6%</div></div>
+        <div class="stat-card"><div class="lbl">Verde</div><div class="val" id="greenPct">0%</div><div class="theo">teórico 2.7%</div></div>
       </div>
-
       <div class="chi-box">
         <div class="row"><span>χ² calculado</span><b id="chi2Val">—</b></div>
         <div class="row"><span>Valor crítico (α=0.05, gl=2)</span><b>5.991</b></div>
-        <div class="verdict verdict-wait" id="verdictBox">Esperando al menos 5 tiradas para la prueba de hipótesis…</div>
+        <div class="verdict" id="verdictBox" style="display:none;"></div>
       </div>
     </div>
 
@@ -243,7 +264,7 @@
     </div>
 
     <div class="panel">
-      <h2>📊 Monedas por jugador (ronda actual)</h2>
+      <h2>💵 Saldo por jugador (ronda actual)</h2>
       <div class="chart-box"><canvas id="barChart"></canvas></div>
       <p class="chart-note" id="barNote">Se reinicia con cada nueva ronda.</p>
     </div>
@@ -258,9 +279,7 @@
     <div class="panel" style="text-align:center;">
       <a href="/admin" target="_blank" style="border:1px solid var(--line);background:transparent;color:var(--gold-bright);
         font-family:'Roboto Mono',monospace;font-size:12px;padding:9px 18px;border-radius:999px;
-        text-decoration:none;display:inline-block;">
-        🔐 Panel de control (recargas y reinicio)
-      </a>
+        text-decoration:none;display:inline-block;">🔐 Panel de control (recargas, ilimitado y reinicio)</a>
     </div>
   </div>
 </div>
@@ -269,30 +288,174 @@
 <script>
 const ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
 const RED_NUMS = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
-const N = ORDER.length;
-const sliceAngle = 360 / N;
-
-const wheelEl = document.getElementById('wheel');
-const ballEl = document.getElementById('ball');
-const spinBtn = document.getElementById('spinBtn');
-const resultChip = document.getElementById('resultChip');
-const resultText = document.getElementById('resultText');
-const spinCountEl = document.getElementById('spinCount');
-const betsResolvedEl = document.getElementById('betsResolved');
-const historyStrip = document.getElementById('historyStrip');
-
-let wheelRotation = 0, ballRotation = 0, spinning = false, totalResolved = 0;
-
+const N = ORDER.length, sliceAngle = 360 / N;
+const SPIN_MS = 4600;
+const fmt = v => Number(v).toFixed(2);
 function colorOf(num){ if(num===0) return 'verde'; return RED_NUMS.has(num) ? 'rojo' : 'negro'; }
 
-// build wheel visuals
+const $ = id => document.getElementById(id);
+const wheelEl = $('wheel'), spinBtn = $('spinBtn'), resultChip = $('resultChip'), resultText = $('resultText');
+const ballEl = $('ball');
+const spinCountEl = $('spinCount'), betsResolvedEl = $('betsResolved'), historyStrip = $('historyStrip');
+
+/* ============================ AUDIO (sintetizado, sin archivos) ============================ */
+let audioCtx = null, sfxOn = true, musicOn = false, musicGain = null;
+function ac(){
+  if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if(audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+// Un "tic" de la bolita: ruido corto filtrado, como el rebote sobre los separadores
+function ballTick(ctx, when, vol){
+  const dur = 0.028, sr = ctx.sampleRate;
+  const buf = ctx.createBuffer(1, Math.floor(sr*dur), sr);
+  const d = buf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/d.length, 3);
+  const src = ctx.createBufferSource(); src.buffer = buf;
+  const bp = ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value = 2200 + Math.random()*900; bp.Q.value = 7;
+  const g = ctx.createGain(); g.gain.value = vol;
+  src.connect(bp); bp.connect(g); g.connect(ctx.destination);
+  src.start(when);
+}
+
+// Zumbido grave de la rueda girando, que se apaga junto con la bolita
+function wheelWhoosh(ctx, when, duration){
+  const sr = ctx.sampleRate;
+  const buf = ctx.createBuffer(1, Math.floor(sr*duration), sr);
+  const d = buf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i] = (Math.random()*2-1);
+  const src = ctx.createBufferSource(); src.buffer = buf;
+  const lp = ctx.createBiquadFilter(); lp.type='lowpass';
+  lp.frequency.setValueAtTime(900, when);
+  lp.frequency.exponentialRampToValueAtTime(120, when + duration);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(0.09, when + 0.25);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+  src.connect(lp); lp.connect(g); g.connect(ctx.destination);
+  src.start(when); src.stop(when + duration);
+}
+
+// Programa los tics: rápidos al inicio y cada vez más lentos, como la bola real
+function playBallSpin(durationSec){
+  if(!sfxOn) return;
+  const ctx = ac();
+  const start = ctx.currentTime + 0.02;
+  wheelWhoosh(ctx, start, durationSec);
+  let t = start, elapsed = 0;
+  while(elapsed < durationSec){
+    const p = elapsed / durationSec;                 // 0 -> 1
+    const rate = 26 * Math.pow(1 - p, 1.7) + 1.4;    // tics por segundo, desacelerando
+    ballTick(ctx, t, 0.30 * (1 - 0.55*p));
+    const dt = 1 / rate;
+    t += dt; elapsed += dt;
+  }
+  // golpecito final: la bola cae en la casilla
+  ballTick(ctx, start + durationSec + 0.05, 0.35);
+  ballTick(ctx, start + durationSec + 0.17, 0.22);
+}
+
+// ===== Música de fondo: lounge de casino con ritmo (bajo + acordes + arpegio + hi-hat)
+const BPM = 104;
+const STEP = 60 / BPM / 2;          // corcheas
+// Progresión ii–V–i en La menor: Am7 · Dm7 · E7 · Am7
+const PROG = [
+  {bass:110.00, chord:[261.63, 329.63, 392.00]},   // Am7
+  {bass:146.83, chord:[293.66, 349.23, 440.00]},   // Dm7
+  {bass:164.81, chord:[329.63, 415.30, 493.88]},   // E7
+  {bass:110.00, chord:[261.63, 329.63, 392.00]},   // Am7
+];
+let stepIdx = 0, nextStepTime = 0, seqTimer = null;
+
+function hat(ctx, t, vol){
+  const dur = 0.035, sr = ctx.sampleRate;
+  const buf = ctx.createBuffer(1, Math.floor(sr*dur), sr);
+  const d = buf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/d.length, 5);
+  const src = ctx.createBufferSource(); src.buffer = buf;
+  const hp = ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value = 7000;
+  const g = ctx.createGain(); g.gain.value = vol;
+  src.connect(hp); hp.connect(g); g.connect(musicGain);
+  src.start(t);
+}
+
+function pluck(ctx, t, freq, dur, vol, type){
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(musicGain);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+
+function stab(ctx, t, notes, vol){
+  notes.forEach(f => pluck(ctx, t, f, 0.28, vol, 'triangle'));
+}
+
+function playStep(s, t){
+  const ctx = ac();
+  const bar = Math.floor(s / 8) % PROG.length, i = s % 8;
+  const P = PROG[bar];
+  hat(ctx, t, i % 2 === 0 ? 0.05 : 0.022);              // pulso constante
+  if(i === 0) pluck(ctx, t, P.bass, 0.5, 0.20, 'triangle');
+  if(i === 4) pluck(ctx, t, P.bass * 1.5, 0.35, 0.14, 'triangle');
+  if(i === 6) pluck(ctx, t, P.bass * 2, 0.25, 0.10, 'triangle');
+  if(i === 2 || i === 5) stab(ctx, t, P.chord, 0.045);  // acordes sincopados
+  if(i === 1 || i === 3 || i === 7)                      // arpegio brillante
+    pluck(ctx, t, P.chord[i % P.chord.length] * 2, 0.22, 0.035, 'sine');
+}
+
+function scheduler(){
+  if(!musicOn) return;
+  const ctx = ac();
+  while(nextStepTime < ctx.currentTime + 0.15){
+    playStep(stepIdx, nextStepTime);
+    nextStepTime += STEP;
+    stepIdx = (stepIdx + 1) % 32;
+  }
+}
+
+function startMusic(){
+  const ctx = ac();
+  if(!musicGain){ musicGain = ctx.createGain(); musicGain.gain.value = 0.9; musicGain.connect(ctx.destination); }
+  musicOn = true; stepIdx = 0; nextStepTime = ctx.currentTime + 0.06;
+  clearInterval(seqTimer); seqTimer = setInterval(scheduler, 35);
+  $('musicBtn').textContent = '🎵 Música de fondo: ON';
+  $('musicBtn').classList.add('on');
+}
+
+function stopMusic(){
+  musicOn = false; clearInterval(seqTimer); seqTimer = null;
+  $('musicBtn').textContent = '🎵 Música de fondo: OFF';
+  $('musicBtn').classList.remove('on');
+}
+
+// Mientras la ruleta gira la música se calla y solo se escucha la bola
+let musicWasOn = false;
+function duckMusicForSpin(ms){
+  musicWasOn = musicOn;
+  if(musicOn) stopMusic();
+  setTimeout(()=>{ if(musicWasOn) startMusic(); }, ms + 900);
+}
+$('musicBtn').addEventListener('click', ()=> musicOn ? stopMusic() : startMusic());
+$('sfxBtn').addEventListener('click', ()=>{
+  sfxOn = !sfxOn;
+  $('sfxBtn').textContent = '🔊 Sonido de la ruleta: ' + (sfxOn ? 'ON' : 'OFF');
+  $('sfxBtn').classList.toggle('on', sfxOn);
+});
+
+/* ============================ RUEDA ============================ */
+// --- cara de la rueda: cada casilla con su color
 const faceEl = document.createElement('div'); faceEl.className='wheel-face';
 faceEl.style.background = 'conic-gradient(from 0deg,' + ORDER.map((num,i)=>{
-  let color = num===0 ? '#0f5a38' : (RED_NUMS.has(num) ? '#b32a3f' : '#161616');
+  const color = num===0 ? '#0f5a38' : (RED_NUMS.has(num) ? '#b32a3f' : '#161616');
   return `${color} ${(i*sliceAngle).toFixed(4)}deg ${((i+1)*sliceAngle).toFixed(4)}deg`;
 }).join(',') + ')';
 wheelEl.appendChild(faceEl);
 
+// --- separadores dorados entre casilla y casilla
 const sepEl = document.createElement('div'); sepEl.className='wheel-separators';
 const sepStops = []; const lw = 0.35;
 ORDER.forEach((num,i)=>{
@@ -302,14 +465,13 @@ ORDER.forEach((num,i)=>{
 sepEl.style.background = `conic-gradient(from 0deg, ${sepStops.join(',')})`;
 wheelEl.appendChild(sepEl);
 
-// Franja oscura exterior donde viven los números (estilo casino real)
+// --- franja oscura exterior donde viven los números
 const bandEl = document.createElement('div'); bandEl.className='wheel-band';
 wheelEl.appendChild(bandEl);
 
 const labelsEl = document.createElement('div'); labelsEl.className='wheel-labels';
 ORDER.forEach((num,i)=>{
   const pocket = document.createElement('div'); pocket.className='pocket';
-  // (i + 0.5) => el número queda en el CENTRO de su casilla, no en el borde
   pocket.style.transform = `rotate(${((i+0.5)*sliceAngle).toFixed(4)}deg)`;
   const span = document.createElement('span'); span.textContent = num;
   pocket.appendChild(span); labelsEl.appendChild(pocket);
@@ -321,70 +483,101 @@ Object.assign(vignette.style, {position:'absolute',inset:'0',borderRadius:'50%',
   background:'radial-gradient(circle at 50% 50%, transparent 55%, rgba(0,0,0,0.35) 100%)'});
 wheelEl.appendChild(vignette);
 
+let ballRotation = 0;
+let wheelRotation = 0, spinning = false, totalResolved = 0;
+
 async function spin(){
   if(spinning) return;
   spinning = true; spinBtn.disabled = true;
+  const res = await fetch('/api/spin', {method:'POST'}).then(r=>r.json()).catch(()=>null);
+  if(!res || res.error){
+    $('subhint').textContent = res && res.error ? res.error : 'Error al girar';
+    spinning = false; spinBtn.disabled = false; return;
+  }
 
-  const res = await fetch('/api/spin', {method:'POST'}).then(r=>r.json());
-  const targetNum = res.number;
-  const targetIndex = ORDER.indexOf(targetNum);
+  playBallSpin(SPIN_MS/1000);
+  duckMusicForSpin(SPIN_MS);
 
-  const extraWheelTurns = 5 + Math.floor(Math.random()*3); // 5, 6 or 7 FULL turns — must be a whole number
+  const targetIndex = ORDER.indexOf(res.number);
+  const extraWheelTurns = 5 + Math.floor(Math.random()*3);   // vueltas ENTERAS
   const targetPocketCenter = targetIndex*sliceAngle + sliceAngle/2;
   wheelRotation = wheelRotation - (wheelRotation % 360) - (extraWheelTurns*360) - targetPocketCenter;
   wheelEl.style.transform = `rotate(${wheelRotation}deg)`;
 
-  const extraBallTurns = 8 + Math.floor(Math.random()*4); // whole turns only, keeps the ball landing at the same fixed spot under the pointer
+  // La bola gira al revés que la rueda y cae justo bajo el puntero
+  const extraBallTurns = 8 + Math.floor(Math.random()*4);
   ballRotation = ballRotation - (ballRotation % 360) + (extraBallTurns*360);
   ballEl.style.transition = 'transform 4.6s cubic-bezier(.1,.7,.25,1)';
   ballEl.style.transform = `rotate(${ballRotation}deg)`;
 
   setTimeout(()=>{
-    landResult(res);
-    spinning = false; spinBtn.disabled = false;
-  }, 4700);
+    resultChip.className = 'result-chip chip-' + res.color;
+    resultChip.textContent = res.number;
+    resultText.textContent = `${res.number} (${res.color})`;
+    totalResolved += res.resolved_bets;
+    betsResolvedEl.textContent = totalResolved;
+    addHistoryChip(res.number, res.color);
+    refreshStats(); refreshLeaderboard(); refreshWinners();
+    spinning = false;
+  }, SPIN_MS);
+
+  // el botón queda bloqueado hasta que termine la ventana de revelación
+  setTimeout(()=>{ spinBtn.disabled = false; }, (res.lock_seconds || 8.5) * 1000);
 }
+spinBtn.addEventListener('click', spin);
 
-function landResult(res){
-  const c = colorOf(res.number);
-  resultChip.className = 'result-chip ' + (c==='rojo'?'chip-red':c==='negro'?'chip-black':'chip-green');
-  resultChip.textContent = res.number;
-  resultText.textContent = `${res.number} (${c})`;
-  totalResolved += res.resolved_bets;
-  betsResolvedEl.textContent = totalResolved;
-
-  const chip = document.createElement('div'); chip.className='hchip';
-  chip.style.background = c==='rojo' ? 'linear-gradient(160deg,#c8324a,#a8283b)' : c==='negro' ? 'linear-gradient(160deg,#3a3a3a,#141414)' : 'linear-gradient(160deg,#2fae74,#0e4a2e)';
-  chip.textContent = res.number;
+function addHistoryChip(num, color){
+  const chip = document.createElement('div');
+  chip.className = 'h-chip ' + color; chip.textContent = num;
   historyStrip.prepend(chip);
   while(historyStrip.children.length > 24) historyStrip.removeChild(historyStrip.lastChild);
-
-  refreshStats();
+}
+function clearBoardVisuals(){
+  totalResolved = 0; betsResolvedEl.textContent = '0';
+  resultChip.className = 'result-chip chip-verde'; resultChip.textContent = '?';
+  resultText.textContent = '—'; historyStrip.innerHTML = '';
 }
 
+/* ============================ GANADORES ============================ */
+async function refreshWinners(){
+  const w = await fetch('/api/winners').then(r=>r.json()).catch(()=>null);
+  const list = $('winnersList'), sum = $('winnersSum');
+  if(!w || !w.count){
+    list.innerHTML = '<div class="winners-empty">Aún no hay ganadores</div>';
+    sum.textContent = ''; return;
+  }
+  sum.textContent = `${w.count} ganaron $${fmt(w.total)} en total`;
+  list.innerHTML = w.list.map(x=>`
+    <div class="winner-row">
+      <span>${x.jackpot?'<span class="jp">PREMIO MAYOR</span> ':''}${x.name}${x.prize?' <span class="pz">🎁 PREMIO</span>':''}</span>
+      <span class="amt">+$${fmt(x.amount)}</span>
+    </div>`).join('');
+}
+
+/* ============================ ESTADÍSTICA ============================ */
+const CHART_FONT = {family:"'Roboto Mono', monospace", size:10};
+const GRID = {color:'rgba(255,255,255,0.06)'};
+const TICK = {color:'#a89f86', font:CHART_FONT};
 let lastKnownTotal = 0;
 
 async function refreshStats(){
-  const s = await fetch('/api/stats').then(r=>r.json());
-
-  // si el admin reinició la ronda, el total cae a 0: limpiamos el tablero solo
+  const s = await fetch('/api/stats').then(r=>r.json()).catch(()=>null);
+  if(!s) return;
   if(s.total === 0 && lastKnownTotal > 0) clearBoardVisuals();
   lastKnownTotal = s.total;
 
   spinCountEl.textContent = s.total;
-  document.getElementById('pRed').textContent = s.red_pct + '%';
-  document.getElementById('pBlack').textContent = s.black_pct + '%';
-  document.getElementById('pGreen').textContent = s.green_pct + '%';
-  document.getElementById('playerCount').textContent = s.active_players;
+  $('playerCount').textContent = s.active_players;
+  $('redPct').textContent = s.red_pct + '%';
+  $('blackPct').textContent = s.black_pct + '%';
+  $('greenPct').textContent = s.green_pct + '%';
 
-  const chiVal = document.getElementById('chi2Val');
-  const verdictBox = document.getElementById('verdictBox');
+  const chiVal = $('chi2Val'), verdictBox = $('verdictBox');
   if(s.chi2 === null){
-    chiVal.textContent = '—';
-    verdictBox.className = 'verdict verdict-wait';
-    verdictBox.textContent = `Esperando al menos 5 tiradas para la prueba de hipótesis… (${s.total}/5)`;
+    chiVal.textContent = '—'; verdictBox.style.display = 'none';
   } else {
     chiVal.textContent = s.chi2;
+    verdictBox.style.display = 'block';
     if(s.verdict === 'normal'){
       verdictBox.className = 'verdict verdict-ok';
       verdictBox.textContent = '✅ No hay evidencia de sesgo — la ruleta se comporta como se espera';
@@ -394,18 +587,16 @@ async function refreshStats(){
     }
   }
 
-  // esperanza y desviación experimentales (variable aleatoria discreta)
-  document.getElementById('expMean').textContent = s.exp_mean !== null ? s.exp_mean : '—';
-  document.getElementById('expStd').textContent  = s.exp_std  !== null ? s.exp_std  : '—';
+  $('expMean').textContent = s.exp_mean !== null ? s.exp_mean : '—';
+  $('expStd').textContent  = s.exp_std  !== null ? s.exp_std  : '—';
 
   renderColorViz(s);
   renderLineChart(s.convergence);
   refreshPlayersChart();
 }
 
-// datos de color: frecuencias y probabilidades teóricas (ruleta europea)
 const P_ROJO = 18/37, P_NEGRO = 18/37, P_VERDE = 1/37;
-let donutChart = null, compareChart = null;
+let donutChart = null, compareChart = null, barChart = null, lineChart = null;
 
 function renderColorViz(s){
   const total = s.total || 0;
@@ -413,171 +604,129 @@ function renderColorViz(s){
   const teo = {rojo:P_ROJO, negro:P_NEGRO, verde:P_VERDE};
   const COL = {rojo:'#c8324a', negro:'#3a3a3a', verde:'#1c9c5f'};
 
-  // --- Dona
-  const dctx = document.getElementById('donutChart');
-  const dData = {
-    labels:['Rojo','Negro','Verde'],
-    datasets:[{data:[s.red, s.black, s.green],
-      backgroundColor:[COL.rojo, COL.negro, COL.verde], borderColor:'#0a2f24', borderWidth:2}]
-  };
+  const dData = {labels:['Rojo','Negro','Verde'],
+    datasets:[{data:[s.red, s.black, s.green], backgroundColor:[COL.rojo,COL.negro,COL.verde],
+      borderColor:'#0a2f24', borderWidth:2}]};
   const dOpts = {responsive:true, maintainAspectRatio:false, cutout:'58%',
     plugins:{legend:{display:false},
       tooltip:{callbacks:{label:it=>`${it.label}: ${it.raw} (${total?(it.raw/total*100).toFixed(1):0}%)`}}}};
   if(donutChart){ donutChart.data = dData; donutChart.update('none'); }
-  else { donutChart = new Chart(dctx, {type:'doughnut', data:dData, options:dOpts}); }
+  else { donutChart = new Chart($('donutChart'), {type:'doughnut', data:dData, options:dOpts}); }
 
-  // leyenda de la dona
-  document.getElementById('donutLegend').innerHTML = ['rojo','negro','verde'].map(k=>{
+  $('donutLegend').innerHTML = ['rojo','negro','verde'].map(k=>{
     const pct = total ? (obs[k]/total*100).toFixed(1) : '0.0';
     const name = k.charAt(0).toUpperCase()+k.slice(1);
-    return `<div class="li"><span class="dot" style="background:${COL[k]}"></span>
-      ${name}: <b>${obs[k]}</b> (${pct}%)</div>`;
+    return `<div class="li"><span class="dot" style="background:${COL[k]}"></span>${name}: <b>${obs[k]}</b> (${pct}%)</div>`;
   }).join('');
 
-  // --- Barras teórica vs experimental (en %)
-  const cctx = document.getElementById('compareChart');
   const expPct = ['rojo','negro','verde'].map(k=> total ? obs[k]/total*100 : 0);
   const teoPct = ['rojo','negro','verde'].map(k=> teo[k]*100);
-  const cData = {
-    labels:['Rojo','Negro','Verde'],
+  const cData = {labels:['Rojo','Negro','Verde'],
     datasets:[
       {label:'Teórica', data:teoPct, backgroundColor:'rgba(232,199,102,0.35)', borderColor:'#e8c766', borderWidth:1},
       {label:'Experimental', data:expPct, backgroundColor:[COL.rojo,COL.negro,COL.verde], borderWidth:0},
-    ]
-  };
+    ]};
   const cOpts = {responsive:true, maintainAspectRatio:false, animation:{duration:300},
     scales:{x:{grid:{display:false}, ticks:TICK},
       y:{beginAtZero:true, grid:GRID, ticks:{...TICK, callback:v=>v+'%'}}},
     plugins:{legend:{labels:{color:'#c9c0a8', font:CHART_FONT, boxWidth:12}}}};
   if(compareChart){ compareChart.data = cData; compareChart.update('none'); }
-  else { compareChart = new Chart(cctx, {type:'bar', data:cData, options:cOpts}); }
+  else { compareChart = new Chart($('compareChart'), {type:'bar', data:cData, options:cOpts}); }
 
-  // --- Tabla f(x)
-  const body = document.getElementById('fxBody');
+  const body = $('fxBody');
   if(!total){
     body.innerHTML = '<tr><td colspan="5" class="fx-empty">Aún no hay tiradas</td></tr>';
-    document.getElementById('fxTotalN').textContent = '0';
-    document.getElementById('fxSumFx').textContent = '—';
+    $('fxTotalN').textContent = '0'; $('fxSumFx').textContent = '—';
   } else {
     const rows = [['Rojo',COL.rojo,s.red,teo.rojo], ['Negro',COL.negro,s.black,teo.negro], ['Verde',COL.verde,s.green,teo.verde]];
     body.innerHTML = rows.map(([name,color,f,p])=>{
-      const fx = f/total, dif = fx - p;
-      const sign = dif>=0 ? '+' : '';
-      return `<tr>
-        <td><span class="fx-dot" style="background:${color}"></span>${name}</td>
+      const fx = f/total, dif = fx - p, sign = dif>=0 ? '+' : '';
+      return `<tr><td><span class="fx-dot" style="background:${color}"></span>${name}</td>
         <td>${f}</td><td>${fx.toFixed(3)}</td><td>${p.toFixed(3)}</td>
-        <td style="color:${Math.abs(dif)<0.05?'#8a8271':(dif>=0?'#5be08a':'#e88a97')}">${sign}${dif.toFixed(3)}</td>
-      </tr>`;
+        <td style="color:${Math.abs(dif)<0.05?'#8a8271':(dif>=0?'#5be08a':'#e88a97')}">${sign}${dif.toFixed(3)}</td></tr>`;
     }).join('');
-    document.getElementById('fxTotalN').textContent = total;
-    document.getElementById('fxSumFx').textContent = '1.000';
+    $('fxTotalN').textContent = total; $('fxSumFx').textContent = '1.000';
   }
 }
 
-// ------------------------------------------------ gráficos (Chart.js)
-const CHART_FONT = {family:"'Roboto Mono', monospace", size:10};
-const GRID = {color:'rgba(255,255,255,0.06)'};
-const TICK = {color:'#a89f86', font:CHART_FONT};
-let barChart = null, lineChart = null;
-
 function renderLineChart(conv){
-  const ctx = document.getElementById('lineChart');
   const labels = conv.map(c=>c.spin);
-  const redData = conv.map(c=>c.red_pct);
-  const blackData = conv.map(c=>c.black_pct);
-  const theoretical = conv.map(()=>48.65);
-
-  const data = {
-    labels,
-    datasets: [
-      {label:'Rojo (experimental)', data:redData, borderColor:'#c8324a', backgroundColor:'#c8324a',
-       tension:0.25, pointRadius:0, borderWidth:2},
-      {label:'Negro (experimental)', data:blackData, borderColor:'#cfcfcf', backgroundColor:'#cfcfcf',
-       tension:0.25, pointRadius:0, borderWidth:2},
-      {label:'Teórico 48.6%', data:theoretical, borderColor:'#e8c766', borderDash:[6,5],
-       pointRadius:0, borderWidth:1.5},
-    ]
-  };
-  const options = {
-    responsive:true, maintainAspectRatio:false, animation:false,
+  const data = {labels,
+    datasets:[
+      {label:'Rojo (experimental)', data:conv.map(c=>c.red_pct), borderColor:'#c8324a',
+       backgroundColor:'#c8324a', tension:0.25, pointRadius:0, borderWidth:2},
+      {label:'Negro (experimental)', data:conv.map(c=>c.black_pct), borderColor:'#cfcfcf',
+       backgroundColor:'#cfcfcf', tension:0.25, pointRadius:0, borderWidth:2},
+      {label:'Teórico 48.6%', data:conv.map(()=>48.65), borderColor:'#e8c766',
+       borderDash:[6,5], pointRadius:0, borderWidth:1.5},
+    ]};
+  const options = {responsive:true, maintainAspectRatio:false, animation:false,
     interaction:{intersect:false, mode:'index'},
     scales:{
       x:{title:{display:true, text:'Número de tiradas', color:'#8a8271', font:CHART_FONT}, grid:GRID, ticks:TICK},
       y:{min:0, max:100, title:{display:true, text:'% acumulado', color:'#8a8271', font:CHART_FONT},
-         grid:GRID, ticks:{...TICK, callback:v=>v+'%'}}
-    },
-    plugins:{legend:{labels:{color:'#c9c0a8', font:CHART_FONT, boxWidth:12}}}
-  };
+         grid:GRID, ticks:{...TICK, callback:v=>v+'%'}}},
+    plugins:{legend:{labels:{color:'#c9c0a8', font:CHART_FONT, boxWidth:12}}}};
   if(lineChart){ lineChart.data = data; lineChart.update('none'); }
-  else { lineChart = new Chart(ctx, {type:'line', data, options}); }
+  else { lineChart = new Chart($('lineChart'), {type:'line', data, options}); }
 }
 
 async function refreshPlayersChart(){
-  const {players} = await fetch('/api/players').then(r=>r.json());
-  const ctx = document.getElementById('barChart');
-  const note = document.getElementById('barNote');
-
+  const res = await fetch('/api/players').then(r=>r.json()).catch(()=>null);
+  if(!res) return;
+  const players = res.players, note = $('barNote');
   if(!players.length){
     note.textContent = 'Nadie conectado todavía. El gráfico aparece cuando entren jugadores.';
     if(barChart){ barChart.destroy(); barChart = null; }
     return;
   }
-  note.textContent = `${players.length} jugador(es) en esta ronda · verde = ganancia neta, rojo = pérdida neta`;
+  const conPremio = players.filter(p=>p.prize).length;
+  note.textContent = `${players.length} jugador(es) · ${conPremio} con premio (saldo ≥ $${fmt(res.prize_threshold)})`
+    + ' · verde = ganancia neta, rojo = pérdida neta';
 
-  const data = {
-    labels: players.map(p=>p.name),
-    datasets: [
-      {label:'Monedas actuales', data:players.map(p=>p.coins),
-       backgroundColor:'rgba(232,199,102,0.75)', borderColor:'#e8c766', borderWidth:1},
-      {label:'Resultado neto', data:players.map(p=>p.net),
-       backgroundColor:players.map(p=>p.net>=0 ? 'rgba(91,224,138,0.6)' : 'rgba(200,50,74,0.6)'),
+  const data = {labels: players.map(p=>p.name),
+    datasets:[
+      {label:'Saldo actual ($)', data:players.map(p=>p.balance),
+       backgroundColor:players.map(p=> p.prize ? 'rgba(91,224,138,0.8)' : 'rgba(232,199,102,0.75)'),
+       borderColor:players.map(p=> p.prize ? '#5be08a' : '#e8c766'), borderWidth:1},
+      {label:'Resultado neto ($)', data:players.map(p=>p.net),
+       backgroundColor:players.map(p=>p.net>=0 ? 'rgba(91,224,138,0.5)' : 'rgba(200,50,74,0.6)'),
        borderColor:players.map(p=>p.net>=0 ? '#5be08a' : '#c8324a'), borderWidth:1},
-    ]
-  };
-  const options = {
-    responsive:true, maintainAspectRatio:false, animation:{duration:300},
-    scales:{
-      x:{grid:GRID, ticks:TICK},
-      y:{grid:GRID, ticks:TICK, title:{display:true, text:'Monedas', color:'#8a8271', font:CHART_FONT}}
-    },
-    plugins:{legend:{labels:{color:'#c9c0a8', font:CHART_FONT, boxWidth:12}}}
-  };
+    ]};
+  const options = {responsive:true, maintainAspectRatio:false, animation:{duration:300},
+    scales:{x:{grid:GRID, ticks:TICK},
+      y:{grid:GRID, ticks:{...TICK, callback:v=>'$'+v},
+         title:{display:true, text:'Dólares de juego', color:'#8a8271', font:CHART_FONT}}},
+    plugins:{legend:{labels:{color:'#c9c0a8', font:CHART_FONT, boxWidth:12}}}};
   if(barChart){ barChart.data = data; barChart.update('none'); }
-  else { barChart = new Chart(ctx, {type:'bar', data, options}); }
+  else { barChart = new Chart($('barChart'), {type:'bar', data, options}); }
 }
 
 async function refreshLeaderboard(){
-  const {leaders} = await fetch('/api/leaderboard').then(r=>r.json());
-  const el = document.getElementById('leaderboard');
-  if(!leaders.length){
-    el.innerHTML = '<span style="color:#7d7458;">Aún no hay jugadores conectados</span>';
-    return;
-  }
+  const res = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>null);
+  if(!res) return;
+  const el = $('leaderboard');
+  if(!res.leaders.length){ el.innerHTML = '<span style="color:#7d7458;">Aún no hay jugadores conectados</span>'; return; }
   const medals = ['🥇','🥈','🥉'];
-  el.innerHTML = leaders.map((p,i)=>
+  el.innerHTML = res.leaders.map((l,i)=>
     `<div style="display:flex;justify-content:space-between;">
-       <span>${medals[i] || (i+1)+'.'} ${p.name}</span>
-       <span style="color:var(--gold-bright);">${p.coins} 🪙</span>
-     </div>`
-  ).join('');
+       <span>${medals[i] || (i+1)+'.'} ${l.name} ${l.prize?'🎁':''}</span>
+       <b style="color:var(--gold-bright);">$${fmt(l.balance)}</b>
+     </div>`).join('');
 }
 
-// El reinicio ahora vive en el panel de admin (/admin), protegido por contraseña.
-// El tablero detecta el reset solo: si el servidor reporta 0 tiradas, se limpia.
-function clearBoardVisuals(){
-  totalResolved = 0;
-  betsResolvedEl.textContent = '0';
-  resultChip.className = 'result-chip chip-green';
-  resultChip.textContent = '?';
-  resultText.textContent = '—';
-  historyStrip.innerHTML = '';
+async function refreshSettings(){
+  const s = await fetch('/api/settings').then(r=>r.json()).catch(()=>null);
+  if(!s) return;
+  $('unlimitedBanner').classList.toggle('show', s.unlimited);
+  if(!spinning) spinBtn.disabled = !s.betting_open;
+  $('subhint').textContent = s.betting_open
+    ? 'Solo el anfitrión gira — los jugadores apuestan desde su celular'
+    : `🎡 Ruleta girando — apuestas cerradas (${s.lock_remaining}s)`;
 }
 
-spinBtn.addEventListener('click', spin);
-refreshStats();
-refreshLeaderboard();
-setInterval(refreshStats, 4000);
-setInterval(refreshLeaderboard, 4000);
+refreshStats(); refreshLeaderboard(); refreshWinners(); refreshSettings();
+setInterval(()=>{ refreshStats(); refreshLeaderboard(); refreshWinners(); refreshSettings(); }, 4000);
 </script>
 </body>
 </html>
