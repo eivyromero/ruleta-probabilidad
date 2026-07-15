@@ -170,11 +170,11 @@
           Total de tiradas: <b id="spinCount">0</b> · Apuestas resueltas: <b id="betsResolved">0</b>
         </div>
       </div>
-      <button class="spin-btn" id="spinBtn">🎯 Girar la ruleta</button>
+      <button class="spin-btn" id="spinBtn"> Girar la ruleta</button>
       <div class="subhint" id="subhint">Solo el anfitrión gira — los jugadores apuestan desde su celular</div>
       <div class="sound-bar">
-        <button class="sound-btn" id="musicBtn">🎵 Música de fondo: OFF</button>
-        <button class="sound-btn on" id="sfxBtn">🔊 Sonido de la ruleta: ON</button>
+        <button class="sound-btn" id="musicBtn"> Música de fondo: OFF</button>
+        <button class="sound-btn on" id="sfxBtn"> Sonido de la ruleta: ON</button>
       </div>
       <div class="history-strip" id="historyStrip"></div>
     </div>
@@ -188,7 +188,7 @@
     </div>
 
     <div class="panel">
-      <h2>🍩 Reparto por color</h2>
+      <h2> Reparto por color</h2>
       <div class="donut-wrap">
         <div class="chart-box" style="height:200px;"><canvas id="donutChart"></canvas></div>
         <div class="donut-legend" id="donutLegend"></div>
@@ -248,7 +248,7 @@
     </div>
 
     <div class="panel">
-      <h2>📐 Variable aleatoria X = número</h2>
+      <h2> Variable aleatoria X = número</h2>
       <div class="moments">
         <div class="moment-card">
           <div class="m-lbl">Esperanza E[X] = Σ x·f(x)</div>
@@ -264,7 +264,7 @@
     </div>
 
     <div class="panel">
-      <h2>💵 Saldo por jugador (ronda actual)</h2>
+      <h2> Saldo por jugador (ronda actual)</h2>
       <div class="chart-box"><canvas id="barChart"></canvas></div>
       <p class="chart-note" id="barNote">Se reinicia con cada nueva ronda.</p>
     </div>
@@ -279,7 +279,7 @@
     <div class="panel" style="text-align:center;">
       <a href="/admin" target="_blank" style="border:1px solid var(--line);background:transparent;color:var(--gold-bright);
         font-family:'Roboto Mono',monospace;font-size:12px;padding:9px 18px;border-radius:999px;
-        text-decoration:none;display:inline-block;">🔐 Panel de control (recargas, ilimitado y reinicio)</a>
+        text-decoration:none;display:inline-block;"> Panel de control (recargas, ilimitado y reinicio)</a>
     </div>
   </div>
 </div>
@@ -442,7 +442,7 @@ function duckMusicForSpin(ms){
 $('musicBtn').addEventListener('click', ()=> musicOn ? stopMusic() : startMusic());
 $('sfxBtn').addEventListener('click', ()=>{
   sfxOn = !sfxOn;
-  $('sfxBtn').textContent = '🔊 Sonido de la ruleta: ' + (sfxOn ? 'ON' : 'OFF');
+  $('sfxBtn').textContent = ' Sonido de la ruleta: ' + (sfxOn ? 'ON' : 'OFF');
   $('sfxBtn').classList.toggle('on', sfxOn);
 });
 
@@ -580,10 +580,10 @@ async function refreshStats(){
     verdictBox.style.display = 'block';
     if(s.verdict === 'normal'){
       verdictBox.className = 'verdict verdict-ok';
-      verdictBox.textContent = '✅ No hay evidencia de sesgo — la ruleta se comporta como se espera';
+      verdictBox.textContent = ' No hay evidencia de sesgo — la ruleta se comporta como se espera';
     } else {
       verdictBox.className = 'verdict verdict-warn';
-      verdictBox.textContent = '⚠️ Los resultados se alejan de lo esperado (revisar con más tiradas)';
+      verdictBox.textContent = ' Los resultados se alejan de lo esperado (revisar con más tiradas)';
     }
   }
 
@@ -722,7 +722,7 @@ async function refreshSettings(){
   if(!spinning) spinBtn.disabled = !s.betting_open;
   $('subhint').textContent = s.betting_open
     ? 'Solo el anfitrión gira — los jugadores apuestan desde su celular'
-    : `🎡 Ruleta girando — apuestas cerradas (${s.lock_remaining}s)`;
+    : ` Ruleta girando — apuestas cerradas (${s.lock_remaining}s)`;
 }
 
 refreshStats(); refreshLeaderboard(); refreshWinners(); refreshSettings();

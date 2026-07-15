@@ -154,7 +154,7 @@
 <body>
 
 <div id="joinScreen">
-  <h1>🎡 Ruleta de la Probabilidad</h1>
+  <h1> Ruleta de la Probabilidad</h1>
   <p class="sub">Ingresa tu nombre para empezar a jugar</p>
   <input id="nameInput" placeholder="Tu nombre" maxlength="24" autocomplete="off">
   <button id="joinBtn">Entrar a jugar</button>
@@ -163,10 +163,10 @@
 </div>
 
 <div id="gameScreen">
-  <h1>🎡 Ruleta</h1>
+  <h1> Ruleta</h1>
   <p class="sub" id="welcomeMsg"></p>
   <div class="coin-bar">
-    <div class="coin-pill">💵 Saldo: $<span class="n" id="balanceVal">5.00</span></div>
+    <div class="coin-pill"> Saldo: $<span class="n" id="balanceVal">5.00</span></div>
     <div class="unlimited-tag" id="unlimitedTag">♾️ JUEGO ILIMITADO</div>
   </div>
 
@@ -381,7 +381,7 @@ async function confirmBets(){
   confirmed = true;
   boardWrap.classList.add('board-locked');
   statusLine.className = 'status-line waiting';
-  statusLine.textContent = '🔒 Apuestas cerradas — esperando que el anfitrión gire la ruleta';
+  statusLine.textContent = ' Apuestas cerradas — esperando que el anfitrión gire la ruleta';
   refreshSummary();
 }
 confirmBtn.addEventListener('click', confirmBets);
@@ -484,12 +484,12 @@ async function pollState(){
     confirmed = true;
     boardWrap.classList.add('board-locked');
     statusLine.className = 'status-line waiting';
-    statusLine.textContent = '🔒 Apuestas cerradas — esperando el giro';
+    statusLine.textContent = ' Apuestas cerradas — esperando el giro';
   }
 
   if(!bettingOpen && !confirmed){
     statusLine.className = 'status-line spinning';
-    statusLine.textContent = `🎡 La ruleta está girando… nadie puede apostar (${res.lock_remaining}s)`;
+    statusLine.textContent = ` La ruleta está girando… nadie puede apostar (${res.lock_remaining}s)`;
     boardWrap.classList.add('board-locked');
   } else if(bettingOpen && !confirmed){
     boardWrap.classList.remove('board-locked');
