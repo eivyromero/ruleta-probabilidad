@@ -173,8 +173,8 @@ $('unlimitedToggle').addEventListener('change', async e=>{
   $('unlimitedState').textContent = res.unlimited ? 'ACTIVADO' : 'DESACTIVADO';
   $('unlimitedState').classList.toggle('on', res.unlimited);
   msg($('unlimitedMsg'), res.unlimited
-    ? '✓ Juego ilimitado ACTIVO — los jugadores ya pueden apostar sin límite'
-    : '✓ Juego ilimitado desactivado — vuelve el límite por saldo');
+    ? ' Juego ilimitado ACTIVO — los jugadores ya pueden apostar sin límite'
+    : ' Juego ilimitado desactivado — vuelve el límite por saldo');
 });
 
 async function loadActive(){
@@ -222,7 +222,7 @@ $('resetBtn').addEventListener('click', async ()=>{
   if(res.ok){ msg($('resetMsg'), '✓ Ronda reiniciada — tabla y gráficos en cero'); loadActive(); loadRegistry(); }
 });
 $('wipeBtn').addEventListener('click', async ()=>{
-  if(!confirm('⚠️ Esto borra TODO, incluido el registro histórico de participantes. ¿Seguro?')) return;
+  if(!confirm(' Esto borra TODO, incluido el registro histórico de participantes. ¿Seguro?')) return;
   if(!confirm('Última confirmación: se pierde el registro completo. ¿Continuar?')) return;
   const res = await fetch('/api/admin/wipe', {method:'POST'}).then(r=>r.json());
   if(res.ok){ msg($('resetMsg'), '✓ Base de datos vaciada por completo'); loadActive(); loadRegistry(); }

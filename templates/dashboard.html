@@ -422,13 +422,13 @@ function startMusic(){
   if(!musicGain){ musicGain = ctx.createGain(); musicGain.gain.value = 0.9; musicGain.connect(ctx.destination); }
   musicOn = true; stepIdx = 0; nextStepTime = ctx.currentTime + 0.06;
   clearInterval(seqTimer); seqTimer = setInterval(scheduler, 35);
-  $('musicBtn').textContent = '🎵 Música de fondo: ON';
+  $('musicBtn').textContent = 'Música de fondo: ON';
   $('musicBtn').classList.add('on');
 }
 
 function stopMusic(){
   musicOn = false; clearInterval(seqTimer); seqTimer = null;
-  $('musicBtn').textContent = '🎵 Música de fondo: OFF';
+  $('musicBtn').textContent = 'Música de fondo: OFF';
   $('musicBtn').classList.remove('on');
 }
 
