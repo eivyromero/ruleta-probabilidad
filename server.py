@@ -17,7 +17,10 @@ Variables de entorno (Render):
 
 import os
 import random
+import secrets
 import socket
+import threading
+import time
 import math
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -31,9 +34,14 @@ APP_DIR = Path(__file__).parent
 # ------------------------------------------------------------- configuración
 STARTING_BALANCE = 5.00       # saldo virtual de bienvenida (dólares de juego)
 PRIZE_THRESHOLD = 10.00       # a partir de aquí el jugador gana un premio simbólico
-REVEAL_DELAY = 5.5            # seg: el celular no ve el resultado antes que el tablero
-GLOW_TIME = 3.0               # seg: el número ganador brilla en el tablero de apuestas
-LOCK_DURATION = REVEAL_DELAY + GLOW_TIME   # apuestas cerradas mientras gira
+
+# --- Ciclo automático (lo manda el reloj del servidor, no un botón) ---
+#     [ giro 25 s ] -> resultado -> [ apuestas 15 s ] -> giro -> ...
+SPIN_DURATION = 25.0          # seg que la rueda gira antes de revelar el número
+BETTING_WINDOW = 15.0         # seg con las apuestas abiertas entre giro y giro
+CYCLE = SPIN_DURATION + BETTING_WINDOW
+REVEAL_DELAY = SPIN_DURATION  # el celular no ve el resultado antes que el tablero
+GLOW_TIME = 3.0               # seg que el número ganador brilla en el tablero de apuestas
 CHI2_CRITICAL = 5.991         # gl=2, alfa=0.05
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Mendoza")
@@ -131,6 +139,7 @@ CREATE TABLE IF NOT EXISTS players (
     coins {MONEY_T} NOT NULL DEFAULT 5,
     active INTEGER NOT NULL DEFAULT 1,
     coins_added {MONEY_T} NOT NULL DEFAULT 0,
+    token TEXT,
     created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS spins (
@@ -162,6 +171,7 @@ CREATE TABLE IF NOT EXISTS settings (
 # Al pasar a dólares con decimales hay que convertirlas. SQLite es de tipado
 # dinámico y no lo necesita; Postgres sí.
 PG_MIGRATIONS = [
+    "ALTER TABLE players ADD COLUMN IF NOT EXISTS token TEXT",
     "ALTER TABLE players ALTER COLUMN coins TYPE DOUBLE PRECISION USING coins::double precision",
     "ALTER TABLE players ALTER COLUMN coins_added TYPE DOUBLE PRECISION USING coins_added::double precision",
     "ALTER TABLE bets ALTER COLUMN stake TYPE DOUBLE PRECISION USING stake::double precision",
@@ -190,6 +200,11 @@ def init_db():
         db = sqlite3.connect(DB_PATH)
         db.executescript(SCHEMA)
         db.commit()
+        try:                                   # base creada antes de los tokens
+            db.execute("ALTER TABLE players ADD COLUMN token TEXT")
+            db.commit()
+        except sqlite3.OperationalError:
+            pass                               # ya existía
         db.close()
 
 
@@ -233,21 +248,68 @@ def join_url() -> str:
     return f"http://{local_ip()}:5000/jugar"
 
 
+def cycle_info():
+    """El reloj del ciclo vive en el SERVIDOR, para que el tablero proyectado y
+    todos los celulares vean exactamente el mismo contador.
+
+        [ girando 25 s ] --> resultado --> [ apuestas 15 s ] --> girando ...
+
+    Se apoya en dos datos: cuándo fue el último giro y cuándo toca el siguiente.
+    """
+    now = datetime.now(timezone.utc)
+
+    raw = get_setting("next_spin_at", "")
+    nsa = None
+    if raw:
+        try:
+            nsa = datetime.fromisoformat(raw)
+            if nsa.tzinfo is None:
+                nsa = nsa.replace(tzinfo=timezone.utc)
+        except ValueError:
+            nsa = None
+    if nsa is None:                       # arranque en frío o tras un reinicio
+        nsa = now + timedelta(seconds=BETTING_WINDOW)
+        set_setting("next_spin_at", nsa.isoformat())
+    elif (now - nsa).total_seconds() > 90:
+        # El plan gratuito de Render duerme el servidor tras un rato sin visitas.
+        # Al despertar no tiene sentido girar de golpe: damos ventana de apuestas.
+        nsa = now + timedelta(seconds=BETTING_WINDOW)
+        set_setting("next_spin_at", nsa.isoformat())
+
+    last = query("SELECT id, number, color, created_at FROM spins ORDER BY id DESC LIMIT 1", one=True)
+    spin_elapsed = None
+    if last:
+        try:
+            t = datetime.fromisoformat(str(last["created_at"]))
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=timezone.utc)
+            spin_elapsed = (now - t).total_seconds()
+        except ValueError:
+            spin_elapsed = None
+
+    # Fase 1: la rueda está girando y el número todavía no se revela.
+    # Al tablero SÍ le decimos el número: es quien tiene que animar la rueda hasta
+    # esa casilla. A los celulares no (usan /api/state, que respeta REVEAL_DELAY).
+    if spin_elapsed is not None and spin_elapsed < SPIN_DURATION:
+        return dict(phase="spinning", remaining=round(SPIN_DURATION - spin_elapsed, 1),
+                    betting_open=False, due=False,
+                    current_spin=dict(id=last["id"], number=last["number"],
+                                      color=last["color"], elapsed=round(spin_elapsed, 2)))
+
+    # Fase 2: resultado en pantalla y ventana de apuestas abierta
+    remaining = (nsa - now).total_seconds()
+    return dict(phase="betting", remaining=round(max(remaining, 0.0), 1),
+                betting_open=remaining > 0, due=remaining <= 0)
+
+
+def schedule_next_spin():
+    set_setting("next_spin_at",
+                (datetime.now(timezone.utc) + timedelta(seconds=CYCLE)).isoformat())
+
+
 def betting_state():
-    """Devuelve (abierto?, segundos_restantes). Mientras la ruleta gira y hasta
-    que se revela el número ganador, nadie puede apostar."""
-    last = query("SELECT created_at FROM spins ORDER BY id DESC LIMIT 1", one=True)
-    if not last:
-        return True, 0.0
-    try:
-        t = datetime.fromisoformat(str(last["created_at"]))
-    except ValueError:
-        return True, 0.0
-    if t.tzinfo is None:
-        t = t.replace(tzinfo=timezone.utc)
-    elapsed = (datetime.now(timezone.utc) - t).total_seconds()
-    remaining = LOCK_DURATION - elapsed
-    return (remaining <= 0), max(remaining, 0.0)
+    c = cycle_info()
+    return c["betting_open"], c["remaining"]
 
 
 # --------------------------------------------------------------------- pages
@@ -312,21 +374,37 @@ def admin_logout():
 # ----------------------------------------------------------------------- api
 @app.route("/api/join", methods=["POST"])
 def api_join():
-    name = (request.json or {}).get("name", "").strip()[:24]
+    """Cada jugador recibe un token privado. Sirve para que pueda recargar su
+    página sin perder la sesión, y a la vez para que NADIE más pueda entrar con
+    un nombre que ya está ocupado."""
+    data = request.json or {}
+    name = data.get("name", "").strip()[:24]
+    token = (data.get("token") or "").strip()
     if not name:
         return jsonify(error="Nombre requerido"), 400
+
     row = query("SELECT * FROM players WHERE name = ?", (name,), one=True)
-    if row is None:
+
+    if row is None:                       # nombre libre: bono de bienvenida
+        new_token = secrets.token_hex(8)
         insert_returning_id(
-            "INSERT INTO players (name, coins, active, created_at) VALUES (?, ?, 1, ?)",
-            (name, STARTING_BALANCE, now_iso()),
+            "INSERT INTO players (name, coins, active, token, created_at) VALUES (?, ?, 1, ?, ?)",
+            (name, STARTING_BALANCE, new_token, now_iso()),
         )
         row = query("SELECT * FROM players WHERE name = ?", (name,), one=True)
-    elif not row["active"]:
-        execute("UPDATE players SET active = 1, coins = ? WHERE id = ?", (STARTING_BALANCE, row["id"]))
+
+    elif not row["active"]:               # volvió tras un reinicio de ronda
+        new_token = secrets.token_hex(8)
+        execute("UPDATE players SET active = 1, coins = ?, token = ? WHERE id = ?",
+                (STARTING_BALANCE, new_token, row["id"]))
         row = query("SELECT * FROM players WHERE name = ?", (name,), one=True)
+
+    else:                                 # el nombre está en uso ahora mismo
+        if not token or token != (row["token"] or ""):
+            return jsonify(error="Nombre de usuario en uso"), 409
+
     return jsonify(id=row["id"], name=row["name"], balance=money(row["coins"]),
-                   unlimited=is_unlimited())
+                   token=row["token"], unlimited=is_unlimited())
 
 
 @app.route("/api/bets", methods=["POST"])
@@ -408,12 +486,9 @@ def _bet_matches(bet_type, value, number):
     return False
 
 
-@app.route("/api/spin", methods=["POST"])
-def api_spin():
-    open_now, remaining = betting_state()
-    if not open_now:
-        return jsonify(error=f"La ruleta ya está girando ({remaining:.0f}s)"), 409
-
+def perform_spin():
+    """Ejecuta un giro: saca el número, resuelve todas las apuestas pendientes y
+    programa el siguiente giro."""
     number = random.choice(ORDER)
     color = color_of(number)
     spin_id = insert_returning_id(
@@ -434,9 +509,35 @@ def api_spin():
             execute("UPDATE players SET coins = coins + ? WHERE id = ?",
                     (ret, bet["player_id"]), commit=False)
     get_db().commit()
+    schedule_next_spin()
 
-    return jsonify(number=number, color=color, spin_id=spin_id,
-                   resolved_bets=len(pending), lock_seconds=LOCK_DURATION)
+    return dict(number=number, color=color, spin_id=spin_id, resolved_bets=len(pending))
+
+
+def _auto_spin_loop():
+    """EL CORAZÓN DEL JUEGO. La ruleta gira sola desde el servidor, no desde el
+    navegador. Así el juego sigue vivo aunque el tablero se recargue, se cierre
+    o la laptop se duerma: al volver, el tablero se re-sincroniza solo."""
+    while True:
+        try:
+            with app.app_context():
+                if cycle_info()["due"]:
+                    perform_spin()
+        except Exception as e:
+            print(f"[auto-spin] {e}")
+        time.sleep(0.4)
+
+
+@app.route("/api/spin", methods=["POST"])
+def api_spin():
+    """Giro manual de emergencia. Normalmente NO se usa: el ciclo automático del
+    servidor se encarga. Queda por si hay que forzar un giro."""
+    c = cycle_info()
+    if not c["due"]:
+        return jsonify(error=f"Aún no toca girar ({c['phase']}, faltan {c['remaining']}s)"), 409
+    res = perform_spin()
+    res.update(spin_duration=SPIN_DURATION, betting_window=BETTING_WINDOW)
+    return jsonify(res)
 
 
 def _reveal_cutoff():
@@ -454,7 +555,7 @@ def api_state():
         return jsonify(error="Jugador no encontrado"), 404
 
     cutoff = _reveal_cutoff()
-    open_now, remaining = betting_state()
+    cyc = cycle_info()
 
     pending = query(
         """SELECT b.id, b.type, b.value, b.stake FROM bets b
@@ -490,8 +591,9 @@ def api_state():
         history=[dict(number=r["number"], color=r["color"]) for r in hist_rows],
         latest_spin_id=latest["id"] if latest else 0,
         latest_spin=(dict(number=latest["number"], color=latest["color"]) if latest else None),
-        betting_open=open_now,
-        lock_remaining=round(remaining, 1),
+        betting_open=cyc["betting_open"],
+        phase=cyc["phase"],
+        remaining=cyc["remaining"],
         unlimited=is_unlimited(),
         prize=balance >= PRIZE_THRESHOLD,
         prize_threshold=PRIZE_THRESHOLD,
@@ -532,18 +634,34 @@ def api_winners():
     return jsonify(_winners_payload())
 
 
+@app.route("/api/cycle")
+def api_cycle():
+    """Lo consultan el tablero y los celulares para ir todos al mismo compás."""
+    c = cycle_info()
+    c.update(spin_duration=SPIN_DURATION, betting_window=BETTING_WINDOW,
+             unlimited=is_unlimited())
+    return jsonify(c)
+
+
 @app.route("/api/settings")
 def api_settings():
-    open_now, remaining = betting_state()
-    return jsonify(unlimited=is_unlimited(), betting_open=open_now,
-                   lock_remaining=round(remaining, 1),
+    c = cycle_info()
+    return jsonify(unlimited=is_unlimited(), betting_open=c["betting_open"],
+                   phase=c["phase"], remaining=c["remaining"],
+                   spin_duration=SPIN_DURATION, betting_window=BETTING_WINDOW,
                    starting_balance=STARTING_BALANCE, prize_threshold=PRIZE_THRESHOLD)
 
 
 @app.route("/api/stats")
 def api_stats():
-    """Estadística descriptiva + inferencial + series para los gráficos."""
-    spins = query("SELECT id, number, color, created_at FROM spins ORDER BY id")
+    """Estadística descriptiva + inferencial + series para los gráficos.
+
+    IMPORTANTE: solo cuenta los giros YA REVELADOS. Si contara el giro en curso,
+    los porcentajes cambiarían antes de que la rueda se detenga y delatarían el
+    color que va a salir."""
+    cutoff = _reveal_cutoff()
+    spins = query("SELECT id, number, color, created_at FROM spins WHERE created_at <= ? ORDER BY id",
+                  (cutoff,))
     total = len(spins)
     red = sum(1 for s in spins if s["color"] == "rojo")
     black = sum(1 for s in spins if s["color"] == "negro")
@@ -587,6 +705,9 @@ def api_stats():
         exp_std = math.sqrt(max(e_x2 - exp_mean ** 2, 0))
 
     active_players = query("SELECT COUNT(*) AS c FROM players WHERE active = 1", one=True)["c"]
+    resolved_bets = query(
+        """SELECT COUNT(*) AS c FROM bets b JOIN spins s ON b.spin_id = s.id
+           WHERE b.resolved = 1 AND s.created_at <= ?""", (cutoff,), one=True)["c"]
 
     return jsonify(
         total=total, red=red, black=black, green=green,
@@ -597,6 +718,7 @@ def api_stats():
         chi2=round(chi2, 3) if chi2 is not None else None,
         chi2_critical=CHI2_CRITICAL, verdict=verdict,
         active_players=active_players,
+        resolved_bets=resolved_bets,
         convergence=convergence,
         freq_numbers=freq_numbers,
         exp_mean=round(exp_mean, 2) if exp_mean is not None else None,
@@ -604,9 +726,23 @@ def api_stats():
     )
 
 
+def _hidden_gains(cutoff):
+    """Cuánto ha ganado cada jugador en giros que la rueda todavía no termina de
+    mostrar. Se resta del saldo para que ni la tabla de líderes ni el gráfico
+    revelen el resultado antes de tiempo."""
+    rows = query(
+        """SELECT b.player_id AS pid, COALESCE(SUM(b.return_amount), 0) AS g
+           FROM bets b JOIN spins s ON b.spin_id = s.id
+           WHERE b.resolved = 1 AND s.created_at > ?
+           GROUP BY b.player_id""", (cutoff,))
+    return {r["pid"]: float(r["g"] or 0) for r in rows}
+
+
 @app.route("/api/players")
 def api_players():
     """Jugadores ACTIVOS de la ronda actual — alimenta el gráfico de barras."""
+    cutoff = _reveal_cutoff()
+    hidden = _hidden_gains(cutoff)
     rows = query(
         """SELECT p.id, p.name, p.coins, p.coins_added,
                   COALESCE(SUM(b.stake), 0) AS staked,
@@ -615,20 +751,23 @@ def api_players():
                   COALESCE(SUM(b.won), 0) AS bets_won
            FROM players p
            LEFT JOIN bets b ON b.player_id = p.id AND b.resolved = 1
+                AND b.spin_id IN (SELECT id FROM spins WHERE created_at <= ?)
            WHERE p.active = 1
            GROUP BY p.id, p.name, p.coins, p.coins_added
-           ORDER BY p.coins DESC, p.name ASC"""
+           ORDER BY p.coins DESC, p.name ASC""", (cutoff,)
     )
     players = []
     for r in rows:
         staked, returned = money(r["staked"]), money(r["returned"])
+        visible = money(float(r["coins"]) - hidden.get(r["id"], 0))
         players.append(dict(
-            id=r["id"], name=r["name"], balance=money(r["coins"]),
+            id=r["id"], name=r["name"], balance=visible,
             staked=staked, returned=returned, net=money(returned - staked),
             bets_count=int(r["bets_count"]), bets_won=int(r["bets_won"]),
             funds_added=money(r["coins_added"]),
-            prize=money(r["coins"]) >= PRIZE_THRESHOLD,
+            prize=visible >= PRIZE_THRESHOLD,
         ))
+    players.sort(key=lambda x: (-x["balance"], x["name"]))
     return jsonify(players=players, prize_threshold=PRIZE_THRESHOLD)
 
 
@@ -655,10 +794,15 @@ def api_registry():
 
 @app.route("/api/leaderboard")
 def api_leaderboard():
-    rows = query("SELECT name, coins FROM players WHERE active = 1 ORDER BY coins DESC, name ASC LIMIT 10")
-    return jsonify(leaders=[dict(name=r["name"], balance=money(r["coins"]),
-                                 prize=money(r["coins"]) >= PRIZE_THRESHOLD) for r in rows],
-                   prize_threshold=PRIZE_THRESHOLD)
+    cutoff = _reveal_cutoff()
+    hidden = _hidden_gains(cutoff)
+    rows = query("SELECT id, name, coins FROM players WHERE active = 1")
+    leaders = []
+    for r in rows:
+        visible = money(float(r["coins"]) - hidden.get(r["id"], 0))
+        leaders.append(dict(name=r["name"], balance=visible, prize=visible >= PRIZE_THRESHOLD))
+    leaders.sort(key=lambda x: (-x["balance"], x["name"]))
+    return jsonify(leaders=leaders[:10], prize_threshold=PRIZE_THRESHOLD)
 
 
 # ------------------------------------------------------------- admin actions
@@ -701,6 +845,20 @@ def api_toggle_unlimited():
     return jsonify(ok=True, unlimited=enabled)
 
 
+@app.route("/api/admin/delete_player", methods=["POST"])
+@admin_required
+def api_delete_player():
+    """Elimina al jugador por completo. Si vuelve a entrar con el mismo nombre
+    se le trata como alguien nuevo: recibe otra vez el bono de bienvenida."""
+    name = (request.json or {}).get("name", "").strip()
+    player = query("SELECT * FROM players WHERE name = ?", (name,), one=True)
+    if player is None:
+        return jsonify(error="Jugador no encontrado"), 404
+    execute("DELETE FROM bets WHERE player_id = ?", (player["id"],), commit=False)
+    execute("DELETE FROM players WHERE id = ?", (player["id"],))
+    return jsonify(ok=True, name=name)
+
+
 @app.route("/api/admin/reset", methods=["POST"])
 @admin_required
 def api_reset():
@@ -708,6 +866,7 @@ def api_reset():
     NO borra el registro histórico."""
     execute("DELETE FROM bets", commit=False)
     execute("DELETE FROM spins", commit=False)
+    execute("DELETE FROM settings WHERE key = 'next_spin_at'", commit=False)
     execute("UPDATE players SET active = 0, coins = ?", (STARTING_BALANCE,))
     return jsonify(ok=True)
 
@@ -718,11 +877,16 @@ def api_wipe():
     """Borrado TOTAL, incluido el registro histórico."""
     execute("DELETE FROM bets", commit=False)
     execute("DELETE FROM spins", commit=False)
+    execute("DELETE FROM settings WHERE key = 'next_spin_at'", commit=False)
     execute("DELETE FROM players")
     return jsonify(ok=True)
 
 
 init_db()   # se ejecuta también bajo gunicorn (Render), no solo en __main__
+
+# El hilo del ciclo arranca junto con la app (también bajo gunicorn, que usa
+# 1 worker por defecto: un solo hilo girando, sin giros duplicados).
+threading.Thread(target=_auto_spin_loop, daemon=True).start()
 
 if __name__ == "__main__":
     ip = local_ip()
@@ -733,5 +897,6 @@ if __name__ == "__main__":
     print(f"  Tablero:       http://{ip}:5000/")
     print(f"  Juego:         {join_url()}")
     print(f"  Admin:         http://{ip}:5000/admin   (clave: {ADMIN_PASSWORD})")
+    print(f"  Ciclo:         {SPIN_DURATION:.0f}s girando + {BETTING_WINDOW:.0f}s de apuestas (automático)")
     print("=" * 60 + "\n")
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)

@@ -28,6 +28,8 @@
   .badge{font-size:10px;padding:2px 8px;border-radius:999px;background:rgba(91,224,138,0.15);color:var(--win);}
   .badge.off{background:rgba(255,255,255,0.06);color:#8a8271;}
   .badge.prize{background:rgba(232,199,102,0.2);color:var(--gold-bright);}
+  .delbtn{border:none;border-radius:999px;padding:6px 12px;cursor:pointer;font-family:'Inter',sans-serif;
+    font-weight:700;font-size:11px;background:linear-gradient(180deg,#d4485c,#8e2334);color:#fff;margin-left:5px;}
   .addbtn{border:none;border-radius:999px;padding:6px 12px;cursor:pointer;font-family:'Inter',sans-serif;
     font-weight:700;font-size:11px;background:linear-gradient(180deg,var(--gold-bright),var(--gold));color:#1a1305;}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
@@ -86,7 +88,12 @@
   </div>
 
   <div class="card">
-    <h2> Recargar saldo a un jugador</h2>
+    <h2> Ciclo automático</h2>
+    <p class="hint" id="cycleHint">Cargando…</p>
+  </div>
+
+  <div class="card">
+    <h2>💵 Recargar saldo a un jugador</h2>
     <div class="row">
       <input type="text" id="playerName" placeholder="Nombre del jugador">
       <input type="number" id="amount" value="5" step="0.25" placeholder="monto $">
@@ -157,10 +164,25 @@ $('addBtn').addEventListener('click', ()=>{
   addFunds(name, amount);
 });
 
+/* Eliminar a un jugador. Se borra por completo, así que si vuelve a entrar con
+   el mismo nombre el sistema lo trata como alguien nuevo y le da otra vez el bono. */
+async function deletePlayer(name){
+  if(!confirm(`¿Eliminar a "${name}"?\n\nSe borran sus apuestas y su saldo. Si vuelve a entrar con el mismo nombre recibirá de nuevo el bono de bienvenida de $5.00.`)) return;
+  const res = await fetch('/api/admin/delete_player', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name})}).then(r=>r.json());
+  if(res.error){ msg($('addMsg'), '✗ ' + res.error, false); return; }
+  msg($('addMsg'), `✓ "${res.name}" eliminado — si vuelve a entrar recibirá el bono de bienvenida`);
+  loadActive(); loadRegistry();
+}
+
 // ---- juego ilimitado
 async function loadSettings(){
   const s = await fetch('/api/settings').then(r=>r.json()).catch(()=>null);
   if(!s) return;
+  $('cycleHint').innerHTML = `La ruleta gira sola: <b>${s.spin_duration}s girando</b> + <b>${s.betting_window}s de apuestas</b>.
+    Ahora mismo: <b style="color:${s.phase==='spinning'?'#7fd4ff':'var(--gold-bright)'}">
+    ${s.phase==='spinning'?'girando':'apuestas abiertas'} (${s.remaining}s)</b>.
+    El tablero proyectado debe permanecer abierto: es quien dispara los giros.`;
   $('unlimitedToggle').checked = s.unlimited;
   $('unlimitedState').textContent = s.unlimited ? 'ACTIVADO' : 'DESACTIVADO';
   $('unlimitedState').classList.toggle('on', s.unlimited);
@@ -191,10 +213,16 @@ async function loadActive(){
         <td>$${fmt(p.staked)}</td>
         <td style="color:${p.net>=0?'#5be08a':'#e88a97'}">${p.net>=0?'+':''}$${fmt(p.net)}</td>
         <td>${p.bets_won}/${p.bets_count}</td>
-        <td><button class="addbtn" data-name="${p.name}">+ saldo</button></td>
+        <td style="white-space:nowrap;">
+          <button class="addbtn" data-name="${p.name}">+ saldo</button>
+          <button class="delbtn" data-del="${p.name}">Eliminar</button>
+        </td>
       </tr>`).join('') + '</tbody></table>';
   wrap.querySelectorAll('.addbtn').forEach(b=>{
     b.addEventListener('click', ()=> addFunds(b.dataset.name, Number($('amount').value)));
+  });
+  wrap.querySelectorAll('.delbtn').forEach(b=>{
+    b.addEventListener('click', ()=> deletePlayer(b.dataset.del));
   });
 }
 
@@ -204,7 +232,7 @@ async function loadRegistry(){
   if(!res.total){ wrap.innerHTML = '<div class="empty">Aún no hay participantes registrados</div>'; return; }
   wrap.innerHTML = `<p class="hint" style="margin:0 0 10px">Total de participantes: <b>${res.total}</b></p>
     <table><thead><tr>
-      <th>Nombre</th><th>Estado</th><th>Saldo</th><th>Recargas</th><th>Apuestas</th><th>Se unió</th>
+      <th>Nombre</th><th>Estado</th><th>Saldo</th><th>Recargas</th><th>Apuestas</th><th>Se unió</th><th></th>
     </tr></thead><tbody>` + res.registry.map(p=>`
       <tr>
         <td><b>${p.name}</b></td>
@@ -213,19 +241,23 @@ async function loadRegistry(){
         <td>$${fmt(p.funds_added)}</td>
         <td>${p.bets_won}/${p.bets_count}</td>
         <td>${p.joined}</td>
+        <td><button class="delbtn" data-del="${p.name}">Eliminar</button></td>
       </tr>`).join('') + '</tbody></table>';
+  wrap.querySelectorAll('.delbtn').forEach(b=>{
+    b.addEventListener('click', ()=> deletePlayer(b.dataset.del));
+  });
 }
 
 $('resetBtn').addEventListener('click', async ()=>{
   if(!confirm('¿Reiniciar la ronda? Se borran giros y apuestas. El registro histórico se conserva.')) return;
   const res = await fetch('/api/admin/reset', {method:'POST'}).then(r=>r.json());
-  if(res.ok){ msg($('resetMsg'), '✓ Ronda reiniciada — tabla y gráficos en cero'); loadActive(); loadRegistry(); }
+  if(res.ok){ msg($('resetMsg'), ' Ronda reiniciada — tabla y gráficos en cero'); loadActive(); loadRegistry(); }
 });
 $('wipeBtn').addEventListener('click', async ()=>{
   if(!confirm(' Esto borra TODO, incluido el registro histórico de participantes. ¿Seguro?')) return;
   if(!confirm('Última confirmación: se pierde el registro completo. ¿Continuar?')) return;
   const res = await fetch('/api/admin/wipe', {method:'POST'}).then(r=>r.json());
-  if(res.ok){ msg($('resetMsg'), '✓ Base de datos vaciada por completo'); loadActive(); loadRegistry(); }
+  if(res.ok){ msg($('resetMsg'), ' Base de datos vaciada por completo'); loadActive(); loadRegistry(); }
 });
 
 loadSettings(); loadActive(); loadRegistry();

@@ -4,8 +4,10 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn server:app --bind 0.0.0.0:$PORT
+    startCommand: gunicorn server:app --bind 0.0.0.0:$PORT --workers 1 --threads 4
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
       - key: ADMIN_PASSWORD
         value: Mendoza
       - key: DATABASE_URL

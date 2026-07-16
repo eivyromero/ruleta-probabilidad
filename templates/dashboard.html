@@ -66,6 +66,26 @@
   .result-meta{font-family:'Roboto Mono',monospace;font-size:13px;color:#c9c0a8;line-height:1.8;text-align:left;}
   .result-meta b{color:var(--gold-bright);}
 
+  .cycle-box{background:rgba(0,0,0,0.25);border:1px solid var(--line);border-radius:14px;
+    padding:14px 18px;margin:0 auto 12px;max-width:420px;}
+  .cycle-label{font-family:'Roboto Mono',monospace;font-size:12px;letter-spacing:0.14em;
+    text-transform:uppercase;color:#a89f86;margin-bottom:4px;}
+  .cycle-timer{font-family:'Playfair Display',serif;font-weight:900;font-size:46px;line-height:1;
+    color:var(--gold-bright);}
+  .cycle-timer small{font-size:18px;font-weight:700;color:#8a8271;}
+  .cycle-track{height:7px;border-radius:999px;background:rgba(255,255,255,0.08);margin-top:10px;overflow:hidden;}
+  .cycle-fill{height:100%;width:0%;border-radius:999px;
+    background:linear-gradient(90deg,var(--gold),var(--gold-bright));transition:width .15s linear;}
+  .cycle-box.betting{border-color:rgba(232,199,102,0.55);box-shadow:0 0 24px -8px rgba(232,199,102,0.5);}
+  .cycle-box.betting .cycle-label{color:var(--gold-bright);}
+  .cycle-box.closing .cycle-timer{color:#ff8f6b;animation:pulseNum .5s ease-in-out infinite;}
+  .cycle-box.closing .cycle-fill{background:linear-gradient(90deg,#d4485c,#ff8f6b);}
+  @keyframes pulseNum{0%,100%{transform:scale(1);}50%{transform:scale(1.12);}}
+  .cycle-box.spinning{border-color:rgba(127,212,255,0.45);}
+  .cycle-box.spinning .cycle-label{color:#7fd4ff;}
+  .cycle-box.spinning .cycle-timer{color:#7fd4ff;}
+  .cycle-box.spinning .cycle-fill{background:linear-gradient(90deg,#2b6b86,#7fd4ff);}
+
   .spin-btn{border:none;border-radius:999px;padding:15px 40px;cursor:pointer;
     background:linear-gradient(180deg,var(--gold-bright),var(--gold));color:#1a1305;
     font-family:'Inter',sans-serif;font-weight:800;font-size:17px;box-shadow:0 10px 26px -8px rgba(203,161,53,0.6);}
@@ -170,8 +190,12 @@
           Total de tiradas: <b id="spinCount">0</b> · Apuestas resueltas: <b id="betsResolved">0</b>
         </div>
       </div>
-      <button class="spin-btn" id="spinBtn"> Girar la ruleta</button>
-      <div class="subhint" id="subhint">Solo el anfitrión gira — los jugadores apuestan desde su celular</div>
+      <div class="cycle-box" id="cycleBox">
+        <div class="cycle-label" id="cycleLabel">Preparando la ruleta…</div>
+        <div class="cycle-timer"><span id="cycleTimer">--</span><small>s</small></div>
+        <div class="cycle-track"><div class="cycle-fill" id="cycleFill"></div></div>
+      </div>
+      <div class="subhint" id="subhint">La ruleta gira sola cada 40 s — 25 s girando + 15 s para apostar</div>
       <div class="sound-bar">
         <button class="sound-btn" id="musicBtn"> Música de fondo: OFF</button>
         <button class="sound-btn on" id="sfxBtn"> Sonido de la ruleta: ON</button>
@@ -264,7 +288,7 @@
     </div>
 
     <div class="panel">
-      <h2> Saldo por jugador (ronda actual)</h2>
+      <h2>💵 Saldo por jugador (ronda actual)</h2>
       <div class="chart-box"><canvas id="barChart"></canvas></div>
       <p class="chart-note" id="barNote">Se reinicia con cada nueva ronda.</p>
     </div>
@@ -279,7 +303,7 @@
     <div class="panel" style="text-align:center;">
       <a href="/admin" target="_blank" style="border:1px solid var(--line);background:transparent;color:var(--gold-bright);
         font-family:'Roboto Mono',monospace;font-size:12px;padding:9px 18px;border-radius:999px;
-        text-decoration:none;display:inline-block;"> Panel de control (recargas, ilimitado y reinicio)</a>
+        text-decoration:none;display:inline-block;"> Panel de control </a>
     </div>
   </div>
 </div>
@@ -289,12 +313,12 @@
 const ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
 const RED_NUMS = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
 const N = ORDER.length, sliceAngle = 360 / N;
-const SPIN_MS = 4600;
+const SPIN_MS = 25000;   // 25 s girando, como pidió el ING
 const fmt = v => Number(v).toFixed(2);
 function colorOf(num){ if(num===0) return 'verde'; return RED_NUMS.has(num) ? 'rojo' : 'negro'; }
 
 const $ = id => document.getElementById(id);
-const wheelEl = $('wheel'), spinBtn = $('spinBtn'), resultChip = $('resultChip'), resultText = $('resultText');
+const wheelEl = $('wheel'), resultChip = $('resultChip'), resultText = $('resultText');
 const ballEl = $('ball');
 const spinCountEl = $('spinCount'), betsResolvedEl = $('betsResolved'), historyStrip = $('historyStrip');
 
@@ -422,13 +446,13 @@ function startMusic(){
   if(!musicGain){ musicGain = ctx.createGain(); musicGain.gain.value = 0.9; musicGain.connect(ctx.destination); }
   musicOn = true; stepIdx = 0; nextStepTime = ctx.currentTime + 0.06;
   clearInterval(seqTimer); seqTimer = setInterval(scheduler, 35);
-  $('musicBtn').textContent = 'Música de fondo: ON';
+  $('musicBtn').textContent = ' Música de fondo: ON';
   $('musicBtn').classList.add('on');
 }
 
 function stopMusic(){
   musicOn = false; clearInterval(seqTimer); seqTimer = null;
-  $('musicBtn').textContent = 'Música de fondo: OFF';
+  $('musicBtn').textContent = ' Música de fondo: OFF';
   $('musicBtn').classList.remove('on');
 }
 
@@ -442,7 +466,7 @@ function duckMusicForSpin(ms){
 $('musicBtn').addEventListener('click', ()=> musicOn ? stopMusic() : startMusic());
 $('sfxBtn').addEventListener('click', ()=>{
   sfxOn = !sfxOn;
-  $('sfxBtn').textContent = ' Sonido de la ruleta: ' + (sfxOn ? 'ON' : 'OFF');
+  $('sfxBtn').textContent = '🔊 Sonido de la ruleta: ' + (sfxOn ? 'ON' : 'OFF');
   $('sfxBtn').classList.toggle('on', sfxOn);
 });
 
@@ -484,47 +508,67 @@ Object.assign(vignette.style, {position:'absolute',inset:'0',borderRadius:'50%',
 wheelEl.appendChild(vignette);
 
 let ballRotation = 0;
-let wheelRotation = 0, spinning = false, totalResolved = 0;
+let wheelRotation = 0, spinning = false;
+let animatedSpinId = 0, cycleWindow = 15;
+let cyclePhase = 'betting', cycleRemaining = 0, cycleSyncAt = 0;
 
-async function spin(){
-  if(spinning) return;
-  spinning = true; spinBtn.disabled = true;
-  const res = await fetch('/api/spin', {method:'POST'}).then(r=>r.json()).catch(()=>null);
-  if(!res || res.error){
-    $('subhint').textContent = res && res.error ? res.error : 'Error al girar';
-    spinning = false; spinBtn.disabled = false; return;
+/* El tablero YA NO decide cuándo girar: el servidor gira solo y aquí únicamente
+   animamos lo que ya pasó. Por eso se puede recargar esta pantalla a media ronda
+   y se vuelve a enganchar sola. */
+function animateSpin(spin, elapsed){
+  spinning = true;
+  const remainingMs = Math.max(SPIN_MS - elapsed*1000, 0);
+
+  // Si entramos a mitad del giro (recarga de página), no animamos 25 s falsos:
+  // saltamos al resultado y esperamos lo que reste.
+  if(elapsed > 1.5){
+    setTimeout(()=> landResult(spin), remainingMs);
+    return;
   }
 
-  playBallSpin(SPIN_MS/1000);
-  duckMusicForSpin(SPIN_MS);
+  playBallSpin(remainingMs/1000);
+  duckMusicForSpin(remainingMs);
 
-  const targetIndex = ORDER.indexOf(res.number);
-  const extraWheelTurns = 5 + Math.floor(Math.random()*3);   // vueltas ENTERAS
+  const targetIndex = ORDER.indexOf(spin.number);
+  const extraWheelTurns = 10 + Math.floor(Math.random()*3);   // vueltas ENTERAS en 25 s
   const targetPocketCenter = targetIndex*sliceAngle + sliceAngle/2;
+  wheelEl.style.transition = `transform ${remainingMs}ms cubic-bezier(.17,.55,.2,1)`;
   wheelRotation = wheelRotation - (wheelRotation % 360) - (extraWheelTurns*360) - targetPocketCenter;
   wheelEl.style.transform = `rotate(${wheelRotation}deg)`;
 
   // La bola gira al revés que la rueda y cae justo bajo el puntero
-  const extraBallTurns = 8 + Math.floor(Math.random()*4);
+  const extraBallTurns = 30 + Math.floor(Math.random()*6);
   ballRotation = ballRotation - (ballRotation % 360) + (extraBallTurns*360);
-  ballEl.style.transition = 'transform 4.6s cubic-bezier(.1,.7,.25,1)';
+  ballEl.style.transition = `transform ${remainingMs}ms cubic-bezier(.12,.5,.18,1)`;
   ballEl.style.transform = `rotate(${ballRotation}deg)`;
 
-  setTimeout(()=>{
-    resultChip.className = 'result-chip chip-' + res.color;
-    resultChip.textContent = res.number;
-    resultText.textContent = `${res.number} (${res.color})`;
-    totalResolved += res.resolved_bets;
-    betsResolvedEl.textContent = totalResolved;
-    addHistoryChip(res.number, res.color);
-    refreshStats(); refreshLeaderboard(); refreshWinners();
-    spinning = false;
-  }, SPIN_MS);
-
-  // el botón queda bloqueado hasta que termine la ventana de revelación
-  setTimeout(()=>{ spinBtn.disabled = false; }, (res.lock_seconds || 8.5) * 1000);
+  setTimeout(()=> landResult(spin), remainingMs);
 }
-spinBtn.addEventListener('click', spin);
+
+function landResult(spin){
+  resultChip.className = 'result-chip chip-' + spin.color;
+  resultChip.textContent = spin.number;
+  resultText.textContent = `${spin.number} (${spin.color})`;
+  addHistoryChip(spin.number, spin.color);
+  startIdleDrift();          // la rueda sigue girando suave con la bola en el ganador
+  spinning = false;
+  // Medio segundo de margen: el servidor solo cuenta los giros con más de 25 s.
+  // Si pidiéramos las estadísticas en el instante exacto, este giro se quedaría
+  // fuera por milésimas y el panel iría una ronda atrasado.
+  setTimeout(()=>{ refreshStats(); refreshLeaderboard(); refreshWinners(); }, 500);
+}
+
+/* La rueda nunca se queda quieta: durante la ventana de apuestas sigue girando
+   MUY despacio, y la bola se mueve con ella para no despegarse del número ganador. */
+function startIdleDrift(){
+  const secs = (cycleWindow || 15) + 3;
+  const drift = 60;                       // grados en toda la ventana: apenas perceptible
+  wheelEl.style.transition = `transform ${secs}s linear`;
+  ballEl.style.transition  = `transform ${secs}s linear`;
+  wheelRotation += drift; ballRotation += drift;
+  wheelEl.style.transform = `rotate(${wheelRotation}deg)`;
+  ballEl.style.transform  = `rotate(${ballRotation}deg)`;
+}
 
 function addHistoryChip(num, color){
   const chip = document.createElement('div');
@@ -533,7 +577,7 @@ function addHistoryChip(num, color){
   while(historyStrip.children.length > 24) historyStrip.removeChild(historyStrip.lastChild);
 }
 function clearBoardVisuals(){
-  totalResolved = 0; betsResolvedEl.textContent = '0';
+  betsResolvedEl.textContent = '0';
   resultChip.className = 'result-chip chip-verde'; resultChip.textContent = '?';
   resultText.textContent = '—'; historyStrip.innerHTML = '';
 }
@@ -567,6 +611,7 @@ async function refreshStats(){
   lastKnownTotal = s.total;
 
   spinCountEl.textContent = s.total;
+  betsResolvedEl.textContent = s.resolved_bets;
   $('playerCount').textContent = s.active_players;
   $('redPct').textContent = s.red_pct + '%';
   $('blackPct').textContent = s.black_pct + '%';
@@ -719,11 +764,47 @@ async function refreshSettings(){
   const s = await fetch('/api/settings').then(r=>r.json()).catch(()=>null);
   if(!s) return;
   $('unlimitedBanner').classList.toggle('show', s.unlimited);
-  if(!spinning) spinBtn.disabled = !s.betting_open;
-  $('subhint').textContent = s.betting_open
-    ? 'Solo el anfitrión gira — los jugadores apuestan desde su celular'
-    : ` Ruleta girando — apuestas cerradas (${s.lock_remaining}s)`;
 }
+
+/* ============================ RELOJ DEL CICLO ============================
+   El servidor manda: dice en qué fase vamos y cuánto falta. Este tablero solo
+   obedece y dispara el giro cuando toca. Así el contador del proyector y el de
+   cada celular marcan exactamente lo mismo. */
+async function pollCycle(){
+  const c = await fetch('/api/cycle').then(r=>r.json()).catch(()=>null);
+  if(!c) return;
+  cyclePhase = c.phase;
+  cycleRemaining = c.remaining;
+  cycleWindow = c.betting_window;
+  cycleSyncAt = performance.now();
+
+  // ¿El servidor arrancó un giro nuevo? Lo animamos.
+  if(c.phase === 'spinning' && c.current_spin && c.current_spin.id !== animatedSpinId){
+    animatedSpinId = c.current_spin.id;
+    animateSpin(c.current_spin, c.current_spin.elapsed);
+  }
+}
+
+// Entre consulta y consulta el contador sigue bajando solo, para que se vea fluido
+function renderCycle(){
+  const box = $('cycleBox'), timer = $('cycleTimer'), label = $('cycleLabel'), fill = $('cycleFill');
+  const elapsed = (performance.now() - cycleSyncAt) / 1000;
+  const rem = Math.max(cycleRemaining - elapsed, 0);
+  timer.textContent = Math.ceil(rem);
+
+  if(cyclePhase === 'spinning' || spinning){
+    box.className = 'cycle-box spinning';
+    label.textContent = ' Girando — apuestas cerradas';
+    fill.style.width = (100 - (rem / (SPIN_MS/1000)) * 100).toFixed(1) + '%';
+  } else {
+    box.className = 'cycle-box betting' + (rem <= 5 ? ' closing' : '');
+    label.textContent = rem <= 5 ? '⏱ ¡Últimos segundos para apostar!' : '⏱ Apuestas abiertas — cierran en';
+    fill.style.width = ((rem / (cycleWindow || 15)) * 100).toFixed(1) + '%';
+  }
+}
+
+pollCycle(); setInterval(pollCycle, 700);
+setInterval(renderCycle, 100);
 
 refreshStats(); refreshLeaderboard(); refreshWinners(); refreshSettings();
 setInterval(()=>{ refreshStats(); refreshLeaderboard(); refreshWinners(); refreshSettings(); }, 4000);
