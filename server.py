@@ -53,6 +53,16 @@ if DATABASE_URL.startswith("postgres://"):
 IS_PG = DATABASE_URL.startswith("postgresql://")
 DB_PATH = APP_DIR / "ruleta.db"
 
+# Los drivers se importan AQUÍ, al cargar el módulo y con un solo hilo vivo.
+# Si se importaran dentro de get_db(), el hilo del ciclo automático y el hilo que
+# atiende la web podrían importarlos a la vez y pillar el módulo a medio cargar
+# ("cannot access submodule 'extras' of module 'psycopg2'").
+if IS_PG:
+    import psycopg2
+    import psycopg2.extras
+else:
+    import sqlite3
+
 ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26]
 RED_NUMS = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
 
@@ -73,11 +83,8 @@ def money(v):
 def get_db():
     if "db" not in g:
         if IS_PG:
-            import psycopg2
-            import psycopg2.extras
             g.db = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
         else:
-            import sqlite3
             g.db = sqlite3.connect(DB_PATH)
             g.db.row_factory = sqlite3.Row
             g.db.execute("PRAGMA foreign_keys = ON")
@@ -182,7 +189,6 @@ PG_MIGRATIONS = [
 
 def init_db():
     if IS_PG:
-        import psycopg2
         db = psycopg2.connect(DATABASE_URL)
         cur = db.cursor()
         cur.execute(SCHEMA)
@@ -196,7 +202,6 @@ def init_db():
         cur.close()
         db.close()
     else:
-        import sqlite3
         db = sqlite3.connect(DB_PATH)
         db.executescript(SCHEMA)
         db.commit()
@@ -518,6 +523,7 @@ def _auto_spin_loop():
     """EL CORAZÓN DEL JUEGO. La ruleta gira sola desde el servidor, no desde el
     navegador. Así el juego sigue vivo aunque el tablero se recargue, se cierre
     o la laptop se duerma: al volver, el tablero se re-sincroniza solo."""
+    time.sleep(3)          # margen para que la app termine de levantarse
     while True:
         try:
             with app.app_context():
