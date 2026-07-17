@@ -174,16 +174,17 @@
 <body>
 
 <div id="joinScreen">
-  <h1> Ruleta de la Probabilidad</h1>
+  <h1>🎡 Ruleta de la Probabilidad</h1>
   <p class="sub">Ingresa tu nombre para empezar a jugar</p>
   <input id="nameInput" placeholder="Tu nombre" maxlength="24" autocomplete="off">
   <button id="joinBtn">Entrar a jugar</button>
   <div class="join-error" id="joinError"></div>
   <p class="welcome-note">Recibes <b>$5.00 de saldo virtual</b> gratis al entrar.<br>
+    Es dinero de juego: no se paga ni se cobra nada.</p>
 </div>
 
 <div id="gameScreen">
-  <h1> Ruleta</h1>
+  <h1>🎡 Ruleta</h1>
   <p class="sub" id="welcomeMsg"></p>
   <div class="cycle-pill" id="cyclePill">
     <span class="cp-label" id="cpLabel">Conectando…</span>
@@ -192,7 +193,7 @@
 
   <div class="coin-bar">
     <div class="coin-pill">💵 Saldo: $<span class="n" id="balanceVal">5.00</span></div>
-    <div class="unlimited-tag" id="unlimitedTag"> JUEGO ILIMITADO</div>
+    <div class="unlimited-tag" id="unlimitedTag">♾️ JUEGO ILIMITADO</div>
   </div>
 
   <div class="stake-bar">
@@ -235,7 +236,7 @@
     </div>
   </div>
 
-  <div class="status-line" id="statusLine">Elige el monto, toca tus casillas y confirma abajo </div>
+  <div class="status-line" id="statusLine">Elige el monto, toca tus casillas y confirma abajo 👇</div>
 </div>
 
 <div class="confirm-bar" id="confirmBar" style="display:none;">
@@ -290,8 +291,8 @@ async function join(name, token){
   if(res.error){
     // El nombre ya lo está usando otra persona en este momento
     err.innerHTML = res.error === 'Nombre de usuario en uso'
-      ? ' <b>Nombre de usuario en uso</b><br>Ya hay alguien jugando con ese nombre. Elige otro.'
-      : ' ' + res.error;
+      ? '🚫 <b>Nombre de usuario en uso</b><br>Ya hay alguien jugando con ese nombre. Elige otro.'
+      : '⚠️ ' + res.error;
     err.classList.add('show');
     localStorage.removeItem('ruletaPlayerName');
     localStorage.removeItem('ruletaPlayerToken');
@@ -310,7 +311,7 @@ async function join(name, token){
   confirmBar.style.display = 'block';
   refreshSummary();
   pollState();
-  setInterval(pollState, 1500);
+  scheduleNextPoll(0);
 }
 
 $('joinBtn').addEventListener('click', ()=>{
@@ -377,10 +378,10 @@ function refreshSummary(){
   $('unlimitedTag').classList.toggle('show', unlimited);
 
   if(!bettingOpen && !confirmed){
-    confirmBtn.textContent = 'Ruleta girando — espera el resultado';
+    confirmBtn.textContent = '🎡 Ruleta girando — espera el resultado';
     confirmBtn.className = 'confirm-btn spinning'; confirmBtn.disabled = true;
   } else if(confirmed){
-    confirmBtn.textContent = 'Apuestas confirmadas — esperando el giro';
+    confirmBtn.textContent = '✓ Apuestas confirmadas — esperando el giro';
     confirmBtn.className = 'confirm-btn locked'; confirmBtn.disabled = true;
   } else {
     confirmBtn.className = 'confirm-btn';
@@ -398,7 +399,7 @@ function toggleSelect(el){
   } else {
     if(currentStake < 0.25){ statusLine.textContent = 'El monto mínimo por casilla es $0.25'; return; }
     if(!unlimited && stakedTotal() + currentStake > balance){
-      statusLine.textContent = 'No te alcanza el saldo para esa apuesta ';
+      statusLine.textContent = 'No te alcanza el saldo para esa apuesta 💵';
       statusLine.className = 'status-line'; return;
     }
     selections[key] = {type, value, payout, stake: currentStake, el};
@@ -407,7 +408,7 @@ function toggleSelect(el){
   statusLine.className = 'status-line';
   statusLine.textContent = Object.keys(selections).length
     ? 'Ajusta tus fichas y pulsa Confirmar cuando estés listo'
-    : 'Elige el monto, toca tus casillas y confirma abajo ';
+    : 'Elige el monto, toca tus casillas y confirma abajo 👇';
   refreshSummary();
 }
 document.querySelectorAll('#numGrid .cell-num, #numGrid .cell-zero, .cell-outside')
@@ -425,8 +426,9 @@ async function confirmBets(){
   confirmed = true;
   boardWrap.classList.add('board-locked');
   statusLine.className = 'status-line waiting';
-  statusLine.textContent = 'Apuestas cerradas';
+  statusLine.textContent = '🔒 Apuestas cerradas — esperando que el anfitrión gire la ruleta';
   refreshSummary();
+  scheduleNextPoll(1500);
 }
 confirmBtn.addEventListener('click', confirmBets);
 
@@ -530,12 +532,12 @@ async function pollState(){
     confirmed = true;
     boardWrap.classList.add('board-locked');
     statusLine.className = 'status-line waiting';
-    statusLine.textContent = 'Apuestas cerradas — esperando el giro';
+    statusLine.textContent = '🔒 Apuestas cerradas — esperando el giro';
   }
 
   if(!bettingOpen && !confirmed){
     statusLine.className = 'status-line spinning';
-    statusLine.textContent = 'La ruleta está girando… espera la próxima ronda para apostar';
+    statusLine.textContent = '🎡 La ruleta está girando… espera la próxima ronda para apostar';
     boardWrap.classList.add('board-locked');
   } else if(bettingOpen && !confirmed){
     boardWrap.classList.remove('board-locked');
@@ -555,16 +557,38 @@ function renderCycle(){
 
   if(cyclePhase === 'spinning'){
     pill.className = 'cycle-pill spinning';
-    lbl.textContent = 'Girando — resultado en';
+    lbl.textContent = '🎡 Girando — resultado en';
   } else if(confirmed){
     pill.className = 'cycle-pill betting' + (rem <= 5 ? ' closing' : '');
-    lbl.textContent = 'Apuestas hechas — gira en';
+    lbl.textContent = '✓ Apuestas hechas — gira en';
   } else {
     pill.className = 'cycle-pill betting' + (rem <= 5 ? ' closing' : '');
     lbl.textContent = rem <= 5 ? '⏱ ¡Últimos segundos!' : '⏱ Apuesta ahora — cierra en';
   }
 }
 setInterval(renderCycle, 100);
+
+/* ---- Sondeo inteligente ----
+   Antes preguntábamos al servidor cada 2.2 s aunque no fuera a pasar nada. Con
+   30 celulares eso son 14 peticiones por segundo, y Render (plan gratis, 0.1 de
+   CPU) no da para tanto: por eso se colgaba.
+
+   Ahora el contador baja solo en el celular (renderCycle) y solo preguntamos
+   cuando de verdad hay algo nuevo: cuando la rueda va a parar o cuando se cierra
+   la ventana de apuestas. Entre medias, un sondeo lento para no perder el hilo. */
+let pollTimer = null;
+function scheduleNextPoll(delayMs){
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(async ()=>{
+    await pollState();
+    const elapsed = (performance.now() - cycleSyncAt) / 1000;
+    const rem = Math.max(cycleRemaining - elapsed, 0);
+    // Preguntar justo cuando termine la fase (+0.4 s de margen), pero nunca
+    // antes de 2 s ni después de 8 s.
+    const next = Math.min(Math.max(rem + 0.4, 2), 8);
+    scheduleNextPoll(next * 1000);
+  }, delayMs);
+}
 
 $('modalClose').addEventListener('click', ()=> winModal.classList.remove('show'));
 if(playerName){ nameInput.value = playerName; join(playerName, playerToken); }

@@ -60,14 +60,52 @@ DB_PATH = APP_DIR / "ruleta.db"
 if IS_PG:
     import psycopg2
     import psycopg2.extras
+    from psycopg2 import pool as _pgpool
 else:
     import sqlite3
+
+# --- Pool de conexiones ---------------------------------------------------
+# Abrir una conexión nueva a Postgres cuesta ~100 ms (red + TLS + login), MUCHO
+# más que la consulta en sí. Con decenas de celulares preguntando cada 2 s eso
+# ahogaba el servidor. El pool las abre una vez y las reutiliza.
+_POOL = None
+_POOL_LOCK = threading.Lock()
+
+
+def get_pool():
+    global _POOL
+    if _POOL is None:
+        with _POOL_LOCK:
+            if _POOL is None:
+                _POOL = _pgpool.ThreadedConnectionPool(
+                    1, 12, DATABASE_URL,
+                    cursor_factory=psycopg2.extras.RealDictCursor)
+    return _POOL
 
 ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26]
 RED_NUMS = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "ruleta-casa-abierta-uleam")
+
+
+_CACHE = {}
+_CACHE_LOCK = threading.Lock()
+
+
+def cached(key, ttl, fn):
+    """Guarda por unos instantes lo que es idéntico para todos los jugadores.
+    Los ganadores del último giro son los mismos para los 30 celulares: no hace
+    falta recalcularlos 30 veces por segundo."""
+    now = time.monotonic()
+    with _CACHE_LOCK:
+        hit = _CACHE.get(key)
+        if hit and now - hit[0] < ttl:
+            return hit[1]
+    val = fn()
+    with _CACHE_LOCK:
+        _CACHE[key] = (now, val)
+    return val
 
 
 def now_iso():
@@ -83,7 +121,15 @@ def money(v):
 def get_db():
     if "db" not in g:
         if IS_PG:
-            g.db = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+            pool = get_pool()
+            for _ in range(60):
+                try:
+                    g.db = pool.getconn(); break
+                except Exception:
+                    time.sleep(0.05)
+            else:
+                g.db = psycopg2.connect(DATABASE_URL,
+                                        cursor_factory=psycopg2.extras.RealDictCursor)
         else:
             g.db = sqlite3.connect(DB_PATH)
             g.db.row_factory = sqlite3.Row
@@ -94,7 +140,21 @@ def get_db():
 @app.teardown_appcontext
 def close_db(exception=None):
     db = g.pop("db", None)
-    if db is not None:
+    if db is None:
+        return
+    if IS_PG:
+        try:
+            # Psycopg2 abre una transacción incluso para los SELECT. Si la
+            # devolvemos al pool sin cerrarla, la conexión queda "idle in
+            # transaction" y termina bloqueando la base.
+            db.rollback()
+            get_pool().putconn(db)
+        except Exception:
+            try:
+                get_pool().putconn(db, close=True)
+            except Exception:
+                pass
+    else:
         db.close()
 
 
@@ -172,6 +232,10 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_bets_player ON bets(player_id);
+CREATE INDEX IF NOT EXISTS idx_bets_spin ON bets(spin_id);
+CREATE INDEX IF NOT EXISTS idx_bets_resolved ON bets(resolved);
+CREATE INDEX IF NOT EXISTS idx_spins_created ON spins(created_at);
 """
 
 # Migraciones: la versión anterior guardaba las columnas de dinero como INTEGER.
@@ -305,6 +369,12 @@ def cycle_info():
     remaining = (nsa - now).total_seconds()
     return dict(phase="betting", remaining=round(max(remaining, 0.0), 1),
                 betting_open=remaining > 0, due=remaining <= 0)
+
+
+def cycle_cached():
+    """Versión cacheada de cycle_info() para las peticiones HTTP. El hilo del
+    ciclo NUNCA debe usar esta: si leyera un 'due' viejo giraría dos veces."""
+    return cached("cycle", 0.4, cycle_info)
 
 
 def schedule_next_spin():
@@ -525,13 +595,20 @@ def _auto_spin_loop():
     o la laptop se duerma: al volver, el tablero se re-sincroniza solo."""
     time.sleep(3)          # margen para que la app termine de levantarse
     while True:
+        nap = 1.0
         try:
             with app.app_context():
-                if cycle_info()["due"]:
+                c = cycle_info()
+                if c["due"]:
                     perform_spin()
+                else:
+                    # Dormir lo que realmente falta. Antes despertaba 1.4 veces por
+                    # segundo sin motivo: en Render (0.1 de CPU) eso se nota.
+                    nap = min(max(c["remaining"], 0.35), 5.0)
         except Exception as e:
-            print(f"[auto-spin] {e}")
-        time.sleep(0.4)
+            print(f"[auto-spin] {type(e).__name__}: {e}", flush=True)
+            nap = 2.0
+        time.sleep(nap)
 
 
 @app.route("/api/spin", methods=["POST"])
@@ -561,7 +638,7 @@ def api_state():
         return jsonify(error="Jugador no encontrado"), 404
 
     cutoff = _reveal_cutoff()
-    cyc = cycle_info()
+    cyc = cycle_cached()
 
     pending = query(
         """SELECT b.id, b.type, b.value, b.stake FROM bets b
@@ -603,13 +680,16 @@ def api_state():
         unlimited=is_unlimited(),
         prize=balance >= PRIZE_THRESHOLD,
         prize_threshold=PRIZE_THRESHOLD,
-        winners=_winners_payload(cutoff),
+        winners=_winners_payload(),
     )
 
 
 def _winners_payload(cutoff=None):
-    """Ganadores del último giro ya revelado: nombre y cuánto ganó.
-    Es lo que se muestra a los costados para motivar a la gente."""
+    """Ganadores del último giro ya revelado (cacheado: es igual para todos)."""
+    return cached("winners", 1.2, _winners_payload_raw)
+
+
+def _winners_payload_raw(cutoff=None):
     if cutoff is None:
         cutoff = _reveal_cutoff()
     last = query("SELECT id, number, color FROM spins WHERE created_at <= ? ORDER BY id DESC LIMIT 1",
@@ -643,7 +723,7 @@ def api_winners():
 @app.route("/api/cycle")
 def api_cycle():
     """Lo consultan el tablero y los celulares para ir todos al mismo compás."""
-    c = cycle_info()
+    c = dict(cycle_cached())
     c.update(spin_duration=SPIN_DURATION, betting_window=BETTING_WINDOW,
              unlimited=is_unlimited())
     return jsonify(c)
@@ -651,7 +731,7 @@ def api_cycle():
 
 @app.route("/api/settings")
 def api_settings():
-    c = cycle_info()
+    c = cycle_cached()
     return jsonify(unlimited=is_unlimited(), betting_open=c["betting_open"],
                    phase=c["phase"], remaining=c["remaining"],
                    spin_duration=SPIN_DURATION, betting_window=BETTING_WINDOW,
@@ -660,6 +740,10 @@ def api_settings():
 
 @app.route("/api/stats")
 def api_stats():
+    return jsonify(cached("stats", 1.5, _stats_payload))
+
+
+def _stats_payload():
     """Estadística descriptiva + inferencial + series para los gráficos.
 
     IMPORTANTE: solo cuenta los giros YA REVELADOS. Si contara el giro en curso,
@@ -715,7 +799,7 @@ def api_stats():
         """SELECT COUNT(*) AS c FROM bets b JOIN spins s ON b.spin_id = s.id
            WHERE b.resolved = 1 AND s.created_at <= ?""", (cutoff,), one=True)["c"]
 
-    return jsonify(
+    return dict(
         total=total, red=red, black=black, green=green,
         red_pct=round(red / total * 100, 1) if total else 0,
         black_pct=round(black / total * 100, 1) if total else 0,
@@ -744,8 +828,7 @@ def _hidden_gains(cutoff):
     return {r["pid"]: float(r["g"] or 0) for r in rows}
 
 
-@app.route("/api/players")
-def api_players():
+def _players_payload():
     """Jugadores ACTIVOS de la ronda actual — alimenta el gráfico de barras."""
     cutoff = _reveal_cutoff()
     hidden = _hidden_gains(cutoff)
@@ -774,7 +857,12 @@ def api_players():
             prize=visible >= PRIZE_THRESHOLD,
         ))
     players.sort(key=lambda x: (-x["balance"], x["name"]))
-    return jsonify(players=players, prize_threshold=PRIZE_THRESHOLD)
+    return dict(players=players, prize_threshold=PRIZE_THRESHOLD)
+
+
+@app.route("/api/players")
+def api_players():
+    return jsonify(cached("players", 2.0, _players_payload))
 
 
 @app.route("/api/registry")
@@ -798,8 +886,7 @@ def api_registry():
     ], total=len(rows))
 
 
-@app.route("/api/leaderboard")
-def api_leaderboard():
+def _leaderboard_payload():
     cutoff = _reveal_cutoff()
     hidden = _hidden_gains(cutoff)
     rows = query("SELECT id, name, coins FROM players WHERE active = 1")
@@ -808,7 +895,12 @@ def api_leaderboard():
         visible = money(float(r["coins"]) - hidden.get(r["id"], 0))
         leaders.append(dict(name=r["name"], balance=visible, prize=visible >= PRIZE_THRESHOLD))
     leaders.sort(key=lambda x: (-x["balance"], x["name"]))
-    return jsonify(leaders=leaders[:10], prize_threshold=PRIZE_THRESHOLD)
+    return dict(leaders=leaders[:10], prize_threshold=PRIZE_THRESHOLD)
+
+
+@app.route("/api/leaderboard")
+def api_leaderboard():
+    return jsonify(cached("leaders", 2.0, _leaderboard_payload))
 
 
 # ------------------------------------------------------------- admin actions

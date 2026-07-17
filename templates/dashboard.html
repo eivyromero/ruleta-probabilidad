@@ -197,8 +197,8 @@
       </div>
       <div class="subhint" id="subhint">La ruleta gira sola cada 40 s — 25 s girando + 15 s para apostar</div>
       <div class="sound-bar">
-        <button class="sound-btn" id="musicBtn"> Música de fondo: OFF</button>
-        <button class="sound-btn on" id="sfxBtn"> Sonido de la ruleta: ON</button>
+        <button class="sound-btn" id="musicBtn">🎵 Música de fondo: OFF</button>
+        <button class="sound-btn on" id="sfxBtn">🔊 Sonido de la ruleta: ON</button>
       </div>
       <div class="history-strip" id="historyStrip"></div>
     </div>
@@ -212,7 +212,7 @@
     </div>
 
     <div class="panel">
-      <h2> Reparto por color</h2>
+      <h2>🍩 Reparto por color</h2>
       <div class="donut-wrap">
         <div class="chart-box" style="height:200px;"><canvas id="donutChart"></canvas></div>
         <div class="donut-legend" id="donutLegend"></div>
@@ -272,7 +272,7 @@
     </div>
 
     <div class="panel">
-      <h2> Variable aleatoria X = número</h2>
+      <h2>📐 Variable aleatoria X = número</h2>
       <div class="moments">
         <div class="moment-card">
           <div class="m-lbl">Esperanza E[X] = Σ x·f(x)</div>
@@ -303,7 +303,7 @@
     <div class="panel" style="text-align:center;">
       <a href="/admin" target="_blank" style="border:1px solid var(--line);background:transparent;color:var(--gold-bright);
         font-family:'Roboto Mono',monospace;font-size:12px;padding:9px 18px;border-radius:999px;
-        text-decoration:none;display:inline-block;"> Panel de control </a>
+        text-decoration:none;display:inline-block;">🔐 Panel de control (recargas, ilimitado y reinicio)</a>
     </div>
   </div>
 </div>
@@ -446,13 +446,13 @@ function startMusic(){
   if(!musicGain){ musicGain = ctx.createGain(); musicGain.gain.value = 0.9; musicGain.connect(ctx.destination); }
   musicOn = true; stepIdx = 0; nextStepTime = ctx.currentTime + 0.06;
   clearInterval(seqTimer); seqTimer = setInterval(scheduler, 35);
-  $('musicBtn').textContent = ' Música de fondo: ON';
+  $('musicBtn').textContent = '🎵 Música de fondo: ON';
   $('musicBtn').classList.add('on');
 }
 
 function stopMusic(){
   musicOn = false; clearInterval(seqTimer); seqTimer = null;
-  $('musicBtn').textContent = ' Música de fondo: OFF';
+  $('musicBtn').textContent = '🎵 Música de fondo: OFF';
   $('musicBtn').classList.remove('on');
 }
 
@@ -562,7 +562,7 @@ function landResult(spin){
    MUY despacio, y la bola se mueve con ella para no despegarse del número ganador. */
 function startIdleDrift(){
   const secs = (cycleWindow || 15) + 3;
-  const drift = 60;                       // grados en toda la ventana: apenas perceptible
+  const drift = 9;                       // grados en toda la ventana: apenas perceptible
   wheelEl.style.transition = `transform ${secs}s linear`;
   ballEl.style.transition  = `transform ${secs}s linear`;
   wheelRotation += drift; ballRotation += drift;
@@ -625,10 +625,10 @@ async function refreshStats(){
     verdictBox.style.display = 'block';
     if(s.verdict === 'normal'){
       verdictBox.className = 'verdict verdict-ok';
-      verdictBox.textContent = ' No hay evidencia de sesgo — la ruleta se comporta como se espera';
+      verdictBox.textContent = '✅ No hay evidencia de sesgo — la ruleta se comporta como se espera';
     } else {
       verdictBox.className = 'verdict verdict-warn';
-      verdictBox.textContent = ' Los resultados se alejan de lo esperado (revisar con más tiradas)';
+      verdictBox.textContent = '⚠️ Los resultados se alejan de lo esperado (revisar con más tiradas)';
     }
   }
 
@@ -794,7 +794,7 @@ function renderCycle(){
 
   if(cyclePhase === 'spinning' || spinning){
     box.className = 'cycle-box spinning';
-    label.textContent = ' Girando — apuestas cerradas';
+    label.textContent = '🎡 Girando — apuestas cerradas';
     fill.style.width = (100 - (rem / (SPIN_MS/1000)) * 100).toFixed(1) + '%';
   } else {
     box.className = 'cycle-box betting' + (rem <= 5 ? ' closing' : '');
@@ -803,11 +803,15 @@ function renderCycle(){
   }
 }
 
-pollCycle(); setInterval(pollCycle, 700);
+pollCycle(); setInterval(pollCycle, 1000);
 setInterval(renderCycle, 100);
 
 refreshStats(); refreshLeaderboard(); refreshWinners(); refreshSettings();
-setInterval(()=>{ refreshStats(); refreshLeaderboard(); refreshWinners(); refreshSettings(); }, 4000);
+/* Las estadísticas solo cambian cuando la rueda para, y de eso ya se encarga
+   landResult(). Pedirlas cada 5 s era ~1 petición por segundo para nada: en
+   Render gratis (0.1 de CPU) eso pesa. Dejamos un repaso lento cada 20 s por si
+   entra gente nueva o el admin recarga saldo. */
+setInterval(()=>{ refreshStats(); refreshLeaderboard(); refreshWinners(); refreshSettings(); }, 20000);
 </script>
 </body>
 </html>
